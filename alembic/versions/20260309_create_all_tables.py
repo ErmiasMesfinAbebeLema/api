@@ -140,24 +140,6 @@ def upgrade() -> None:
         sa.Column('updated_at', DateTime, nullable=False),
     )
 
-    # === Payments Table ===
-    op.create_table(
-        'payments',
-        sa.Column('id', Integer, primary_key=True, index=True),
-        sa.Column('student_id', Integer, ForeignKey('students.id'), nullable=False, index=True),
-        sa.Column('enrollment_id', Integer, ForeignKey('enrollments.id'), nullable=True, index=True),
-        sa.Column('invoice_id', Integer, ForeignKey('invoices.id'), nullable=True, index=True),
-        sa.Column('amount', Numeric(10, 2), nullable=False),
-        sa.Column('payment_date', Date, nullable=False),
-        sa.Column('payment_method_id', Integer, ForeignKey('payment_methods.id'), nullable=False),
-        sa.Column('transaction_reference', String(255), nullable=True),
-        sa.Column('status', SQLEnum(PaymentStatus, name='paymentstatus'), default=PaymentStatus.COMPLETED, index=True),
-        sa.Column('notes', Text, nullable=True),
-        sa.Column('recorded_by', Integer, ForeignKey('users.id'), nullable=True),
-        sa.Column('created_at', DateTime, nullable=False),
-        sa.Column('updated_at', DateTime, nullable=False),
-    )
-
     # === Invoices Table ===
     op.create_table(
         'invoices',
@@ -178,6 +160,24 @@ def upgrade() -> None:
         sa.Column('updated_at', DateTime, nullable=False),
     )
 
+    # === Payments Table ===
+    op.create_table(
+        'payments',
+        sa.Column('id', Integer, primary_key=True, index=True),
+        sa.Column('student_id', Integer, ForeignKey('students.id'), nullable=False, index=True),
+        sa.Column('enrollment_id', Integer, ForeignKey('enrollments.id'), nullable=True, index=True),
+        sa.Column('invoice_id', Integer, ForeignKey('invoices.id'), nullable=True, index=True),
+        sa.Column('amount', Numeric(10, 2), nullable=False),
+        sa.Column('payment_date', Date, nullable=False),
+        sa.Column('payment_method_id', Integer, ForeignKey('payment_methods.id'), nullable=False),
+        sa.Column('transaction_reference', String(255), nullable=True),
+        sa.Column('status', SQLEnum(PaymentStatus, name='paymentstatus'), default=PaymentStatus.COMPLETED, index=True),
+        sa.Column('notes', Text, nullable=True),
+        sa.Column('recorded_by', Integer, ForeignKey('users.id'), nullable=True),
+        sa.Column('created_at', DateTime, nullable=False),
+        sa.Column('updated_at', DateTime, nullable=False),
+    )
+
     # === Invoice Items Table ===
     op.create_table(
         'invoice_items',
@@ -194,11 +194,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Drop tables in reverse order
+    # Drop tables in reverse order (inverse of creation)
     # Note: student_documents is dropped by migration 17a4e103a30c
     op.drop_table('invoice_items')
-    op.drop_table('invoices')
     op.drop_table('payments')
+    op.drop_table('invoices')
     op.drop_table('payment_methods')
     op.drop_table('certificates')
     op.drop_table('certificate_templates')
