@@ -1,0 +1,47 @@
+version: '3.8'
+services:
+  api:
+    container_name: api
+    build: 
+      context: .
+      dockerfile: api.dockerfile
+    volumes:
+      - ./api:/api
+      - ./alembic:/api/alembic
+    ports:
+      - 8000:8000
+    env_file:
+      - .env
+    depends_on:
+      - database_postgres
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://root:root@database_postgres:5432/db1010
+
+  database_postgres:  
+    container_name: database  
+    image: postgres
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_PASSWORD: root
+      POSTGRES_USER: root
+      POSTGRES_DB: db1010 
+    volumes:
+      - pg_data:/var/lib/postgresql    
+
+  pgweb:
+    container_name: pgweb
+    restart: always
+    image: sosedoff/pgweb
+    ports:
+      - 8081:8081
+    links:
+      - database_postgres:database_postgres
+    environment:
+      - PGWEB_DATABASE_URL=postgres://root:root@database_postgres:5432/db1010?sslmode=disable
+    depends_on:
+      - database_postgres
+
+volumes:
+  pg_data:
