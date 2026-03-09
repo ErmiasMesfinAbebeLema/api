@@ -58,8 +58,12 @@ class InvoiceStatus(str, enum.Enum):
 
 
 def upgrade() -> None:
-    # === Student Documents Table ===
-    document_type = SQLEnum(DocumentType, name='documenttype', create_type=False)
+    # Create enum types - use create_type=True to ensure they're created
+    document_type = SQLEnum(DocumentType, name='documenttype', create_type=True)
+    course_enrollment_status = SQLEnum(CourseEnrollmentStatus, name='courseenrollmentstatus', create_type=True)
+    certificate_status = SQLEnum(CertificateStatus, name='certificatestatus', create_type=True)
+    payment_status = SQLEnum(PaymentStatus, name='paymentstatus', create_type=True)
+    invoice_status = SQLEnum(InvoiceStatus, name='invoicestatus', create_type=True)
     op.create_table(
         'student_documents',
         sa.Column('id', Integer, primary_key=True, index=True),
@@ -95,7 +99,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_courses_name'), 'courses', ['name'])
 
     # === Enrollments Table ===
-    course_enrollment_status = SQLEnum(CourseEnrollmentStatus, name='courseenrollmentstatus', create_type=False)
+    course_enrollment_status = SQLEnum(CourseEnrollmentStatus, name='courseenrollmentstatus', create_type=True)
     op.create_table(
         'enrollments',
         sa.Column('id', Integer, primary_key=True, index=True),
@@ -134,7 +138,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_certificate_templates_name'), 'certificate_templates', ['name'])
 
     # === Certificates Table ===
-    certificate_status = SQLEnum(CertificateStatus, name='certificatestatus', create_type=False)
+    certificate_status = SQLEnum(CertificateStatus, name='certificatestatus', create_type=True)
     op.create_table(
         'certificates',
         sa.Column('id', Integer, primary_key=True, index=True),
@@ -173,7 +177,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_payment_methods_name'), 'payment_methods', ['name'])
 
     # === Payments Table ===
-    payment_status = SQLEnum(PaymentStatus, name='paymentstatus', create_type=False)
+    payment_status = SQLEnum(PaymentStatus, name='paymentstatus', create_type=True)
     op.create_table(
         'payments',
         sa.Column('id', Integer, primary_key=True, index=True),
@@ -197,7 +201,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_payments_status'), 'payments', ['status'])
 
     # === Invoices Table ===
-    invoice_status = SQLEnum(InvoiceStatus, name='invoicestatus', create_type=False)
+    invoice_status = SQLEnum(InvoiceStatus, name='invoicestatus', create_type=True)
     op.create_table(
         'invoices',
         sa.Column('id', Integer, primary_key=True, index=True),

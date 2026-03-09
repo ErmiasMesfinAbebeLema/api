@@ -19,10 +19,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create enum types
-    user_role = sa.Enum('ADMIN', 'INSTRUCTOR', 'STUDENT', name='userrole', create_type=False)
-    gender = sa.Enum('MALE', 'FEMALE', 'OTHER', name='gender', create_type=False)
-    enrollment_status = sa.Enum('PENDING', 'ACTIVE', 'GRADUATED', 'SUSPENDED', 'WITHDRAWN', name='enrollmentstatus', create_type=False)
+    # Create enum types - use create_type=True to ensure they're created
+    user_role = sa.Enum('ADMIN', 'INSTRUCTOR', 'STUDENT', name='userrole', create_type=True)
+    gender = sa.Enum('MALE', 'FEMALE', 'OTHER', name='gender', create_type=True)
+    enrollment_status = sa.Enum('PENDING', 'ACTIVE', 'GRADUATED', 'SUSPENDED', 'WITHDRAWN', name='enrollmentstatus', create_type=True)
     
     # Create users table
     op.create_table(

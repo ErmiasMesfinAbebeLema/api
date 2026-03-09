@@ -13,8 +13,8 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import models
-from api.models import Base
-from api.config import settings
+from models import Base
+from config import settings
 
 
 # this is the Alembic Config object, which provides

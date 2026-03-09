@@ -28,20 +28,7 @@ services:
       POSTGRES_USER: root
       POSTGRES_DB: db1010 
     volumes:
-      - pg_data:/var/lib/postgresql    
-
-  pgweb:
-    container_name: pgweb
-    restart: always
-    image: sosedoff/pgweb
-    ports:
-      - 8081:8081
-    links:
-      - database_postgres:database_postgres
-    environment:
-      - PGWEB_DATABASE_URL=postgres://root:root@database_postgres:5432/db1010?sslmode=disable
-    depends_on:
-      - database_postgres
+      - pg_data:/var/lib/postgresql/data    
 
 volumes:
   pg_data:
