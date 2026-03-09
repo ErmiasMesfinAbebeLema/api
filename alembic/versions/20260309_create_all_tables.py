@@ -58,29 +58,9 @@ class InvoiceStatus(str, enum.Enum):
 
 
 def upgrade() -> None:
-    # Create enum types - use create_type=True to ensure they're created
-    document_type = SQLEnum(DocumentType, name='documenttype', create_type=True)
-    course_enrollment_status = SQLEnum(CourseEnrollmentStatus, name='courseenrollmentstatus', create_type=True)
-    certificate_status = SQLEnum(CertificateStatus, name='certificatestatus', create_type=True)
-    payment_status = SQLEnum(PaymentStatus, name='paymentstatus', create_type=True)
-    invoice_status = SQLEnum(InvoiceStatus, name='invoicestatus', create_type=True)
-    op.create_table(
-        'student_documents',
-        sa.Column('id', Integer, primary_key=True, index=True),
-        sa.Column('student_id', Integer, ForeignKey('students.id'), nullable=False, index=True),
-        sa.Column('document_type', document_type, nullable=False, index=True),
-        sa.Column('file_name', String(255)),
-        sa.Column('file_path', String(500)),
-        sa.Column('file_size', Integer),
-        sa.Column('mime_type', String(100)),
-        sa.Column('description', Text, nullable=True),
-        sa.Column('uploaded_by', Integer, ForeignKey('users.id'), nullable=True),
-        sa.Column('uploaded_at', DateTime, nullable=False),
-        sa.Column('is_active', Boolean, default=True),
-    )
-    op.create_index(op.f('ix_student_documents_id'), 'student_documents', ['id'])
-    op.create_index(op.f('ix_student_documents_student_id'), 'student_documents', ['student_id'])
-    op.create_index(op.f('ix_student_documents_document_type'), 'student_documents', ['document_type'])
+    # === Student Documents Table ===
+    # NOTE: student_documents table is created by migration 17a4e103a30c
+    # This migration only creates the remaining tables
 
     # === Courses Table ===
     op.create_table(
@@ -95,18 +75,15 @@ def upgrade() -> None:
         sa.Column('created_at', DateTime, nullable=False),
         sa.Column('updated_at', DateTime, nullable=False),
     )
-    op.create_index(op.f('ix_courses_id'), 'courses', ['id'])
-    op.create_index(op.f('ix_courses_name'), 'courses', ['name'])
 
     # === Enrollments Table ===
-    course_enrollment_status = SQLEnum(CourseEnrollmentStatus, name='courseenrollmentstatus', create_type=True)
     op.create_table(
         'enrollments',
         sa.Column('id', Integer, primary_key=True, index=True),
         sa.Column('student_id', Integer, ForeignKey('students.id'), nullable=False, index=True),
         sa.Column('course_id', Integer, ForeignKey('courses.id'), nullable=False, index=True),
         sa.Column('fee', Numeric(10, 2), nullable=True),
-        sa.Column('status', course_enrollment_status, default=CourseEnrollmentStatus.PENDING, index=True),
+        sa.Column('status', SQLEnum(CourseEnrollmentStatus, name='courseenrollmentstatus'), default=CourseEnrollmentStatus.PENDING, index=True),
         sa.Column('enrolled_at', DateTime, nullable=False),
         sa.Column('start_date', Date, nullable=True),
         sa.Column('completion_date', Date, nullable=True),
@@ -116,10 +93,6 @@ def upgrade() -> None:
         sa.Column('created_at', DateTime, nullable=False),
         sa.Column('updated_at', DateTime, nullable=False),
     )
-    op.create_index(op.f('ix_enrollments_id'), 'enrollments', ['id'])
-    op.create_index(op.f('ix_enrollments_student_id'), 'enrollments', ['student_id'])
-    op.create_index(op.f('ix_enrollments_course_id'), 'enrollments', ['course_id'])
-    op.create_index(op.f('ix_enrollments_status'), 'enrollments', ['status'])
 
     # === Certificate Templates Table ===
     op.create_table(
@@ -134,11 +107,8 @@ def upgrade() -> None:
         sa.Column('created_at', DateTime, nullable=False),
         sa.Column('updated_at', DateTime, nullable=False),
     )
-    op.create_index(op.f('ix_certificate_templates_id'), 'certificate_templates', ['id'])
-    op.create_index(op.f('ix_certificate_templates_name'), 'certificate_templates', ['name'])
 
     # === Certificates Table ===
-    certificate_status = SQLEnum(CertificateStatus, name='certificatestatus', create_type=True)
     op.create_table(
         'certificates',
         sa.Column('id', Integer, primary_key=True, index=True),
@@ -150,7 +120,7 @@ def upgrade() -> None:
         sa.Column('expiry_date', Date, nullable=True),
         sa.Column('cert_metadata', JSON, nullable=True),
         sa.Column('pdf_url', String(500), nullable=True),
-        sa.Column('status', certificate_status, default=CertificateStatus.ACTIVE, index=True),
+        sa.Column('status', SQLEnum(CertificateStatus, name='certificatestatus'), default=CertificateStatus.ACTIVE, index=True),
         sa.Column('revocation_reason', Text, nullable=True),
         sa.Column('revoked_by', Integer, ForeignKey('users.id'), nullable=True),
         sa.Column('revoked_at', DateTime, nullable=True),
@@ -158,10 +128,6 @@ def upgrade() -> None:
         sa.Column('created_at', DateTime, nullable=False),
         sa.Column('updated_at', DateTime, nullable=False),
     )
-    op.create_index(op.f('ix_certificates_id'), 'certificates', ['id'])
-    op.create_index(op.f('ix_certificates_certificate_number'), 'certificates', ['certificate_number'], unique=True)
-    op.create_index(op.f('ix_certificates_student_id'), 'certificates', ['student_id'])
-    op.create_index(op.f('ix_certificates_status'), 'certificates', ['status'])
 
     # === Payment Methods Table ===
     op.create_table(
@@ -173,11 +139,8 @@ def upgrade() -> None:
         sa.Column('created_at', DateTime, nullable=False),
         sa.Column('updated_at', DateTime, nullable=False),
     )
-    op.create_index(op.f('ix_payment_methods_id'), 'payment_methods', ['id'])
-    op.create_index(op.f('ix_payment_methods_name'), 'payment_methods', ['name'])
 
     # === Payments Table ===
-    payment_status = SQLEnum(PaymentStatus, name='paymentstatus', create_type=True)
     op.create_table(
         'payments',
         sa.Column('id', Integer, primary_key=True, index=True),
@@ -188,20 +151,14 @@ def upgrade() -> None:
         sa.Column('payment_date', Date, nullable=False),
         sa.Column('payment_method_id', Integer, ForeignKey('payment_methods.id'), nullable=False),
         sa.Column('transaction_reference', String(255), nullable=True),
-        sa.Column('status', payment_status, default=PaymentStatus.COMPLETED, index=True),
+        sa.Column('status', SQLEnum(PaymentStatus, name='paymentstatus'), default=PaymentStatus.COMPLETED, index=True),
         sa.Column('notes', Text, nullable=True),
         sa.Column('recorded_by', Integer, ForeignKey('users.id'), nullable=True),
         sa.Column('created_at', DateTime, nullable=False),
         sa.Column('updated_at', DateTime, nullable=False),
     )
-    op.create_index(op.f('ix_payments_id'), 'payments', ['id'])
-    op.create_index(op.f('ix_payments_student_id'), 'payments', ['student_id'])
-    op.create_index(op.f('ix_payments_enrollment_id'), 'payments', ['enrollment_id'])
-    op.create_index(op.f('ix_payments_invoice_id'), 'payments', ['invoice_id'])
-    op.create_index(op.f('ix_payments_status'), 'payments', ['status'])
 
     # === Invoices Table ===
-    invoice_status = SQLEnum(InvoiceStatus, name='invoicestatus', create_type=True)
     op.create_table(
         'invoices',
         sa.Column('id', Integer, primary_key=True, index=True),
@@ -213,17 +170,13 @@ def upgrade() -> None:
         sa.Column('discount_amount', Numeric(10, 2), nullable=False, default=0),
         sa.Column('tax_amount', Numeric(10, 2), nullable=False, default=0),
         sa.Column('grand_total', Numeric(10, 2), nullable=False, default=0),
-        sa.Column('status', invoice_status, default=InvoiceStatus.DRAFT, index=True),
+        sa.Column('status', SQLEnum(InvoiceStatus, name='invoicestatus'), default=InvoiceStatus.DRAFT, index=True),
         sa.Column('notes', Text, nullable=True),
         sa.Column('pdf_url', String(500), nullable=True),
         sa.Column('created_by', Integer, ForeignKey('users.id'), nullable=True),
         sa.Column('created_at', DateTime, nullable=False),
         sa.Column('updated_at', DateTime, nullable=False),
     )
-    op.create_index(op.f('ix_invoices_id'), 'invoices', ['id'])
-    op.create_index(op.f('ix_invoices_invoice_number'), 'invoices', ['invoice_number'], unique=True)
-    op.create_index(op.f('ix_invoices_student_id'), 'invoices', ['student_id'])
-    op.create_index(op.f('ix_invoices_status'), 'invoices', ['status'])
 
     # === Invoice Items Table ===
     op.create_table(
@@ -238,12 +191,11 @@ def upgrade() -> None:
         sa.Column('created_at', DateTime, nullable=False),
         sa.Column('updated_at', DateTime, nullable=False),
     )
-    op.create_index(op.f('ix_invoice_items_id'), 'invoice_items', ['id'])
-    op.create_index(op.f('ix_invoice_items_invoice_id'), 'invoice_items', ['invoice_id'])
 
 
 def downgrade() -> None:
     # Drop tables in reverse order
+    # Note: student_documents is dropped by migration 17a4e103a30c
     op.drop_table('invoice_items')
     op.drop_table('invoices')
     op.drop_table('payments')
@@ -252,4 +204,3 @@ def downgrade() -> None:
     op.drop_table('certificate_templates')
     op.drop_table('enrollments')
     op.drop_table('courses')
-    op.drop_table('student_documents')
