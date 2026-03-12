@@ -79,7 +79,7 @@ async def get_students(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_students"))
 ):
     """
     Get all students (Admin and Instructor only)
@@ -119,7 +119,7 @@ async def get_student(
 async def create_student(
     student_data: StudentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.INSTRUCTOR]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="create_students"))
 ):
     """
     Create a new student (Admin and Instructor only)
@@ -161,7 +161,7 @@ async def create_student(
 async def create_student_with_user(
     student_data: StudentWithUserCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.INSTRUCTOR]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="create_students"))
 ):
     """
     Create a new student with user account in one request (Admin and Instructor only)
@@ -239,7 +239,7 @@ async def update_student(
     student_id: int,
     student_data: StudentUpdateWithUser,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_students"))
 ):
     """
     Update a student (Admin only)
@@ -304,7 +304,7 @@ async def update_student(
 async def delete_student(
     student_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN]))
+    current_user: User = Depends(require_role(["admin"], required_permission="delete_students"))
 ):
     """
     Delete a student (Admin only)

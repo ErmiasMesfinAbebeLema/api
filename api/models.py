@@ -16,6 +16,7 @@ class Base(DeclarativeBase):
 # ─────────────────────────────────────────────────────────
 
 class UserRole(str, enum.Enum):
+    SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
     INSTRUCTOR = "instructor"
     STUDENT = "student"
@@ -105,6 +106,101 @@ class User(Base):
     
     # Relationship
     student: Mapped[Optional["Student"]] = relationship("Student", back_populates="user", uselist=False)
+    admin_permissions: Mapped[Optional["AdminPermission"]] = relationship(
+        "AdminPermission", 
+        back_populates="admin", 
+        uselist=False, 
+        cascade="all, delete-orphan",
+        foreign_keys="AdminPermission.admin_id"
+    )
+
+
+# ─────────────────────────────────────────────────────────
+# Admin Permission Model
+# ─────────────────────────────────────────────────────────
+
+class AdminPermission(Base):
+    """Admin permission model - stores custom permissions for each admin"""
+    __tablename__ = "admin_permissions"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    admin_id: Mapped[int] = mapped_column(
+        Integer, 
+        ForeignKey("users.id"), 
+        unique=True, 
+        nullable=False, 
+        index=True
+    )
+    
+    # User Management
+    can_manage_users: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_create_users: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_edit_users: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_delete_users: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Student Management
+    can_manage_students: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_view_students: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_create_students: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_edit_students: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_delete_students: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Course Management
+    can_manage_courses: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_create_courses: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_edit_courses: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_delete_courses: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Certificate Management
+    can_manage_certificates: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_create_certificates: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_edit_certificates: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_delete_certificates: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_revoke_certificates: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Enrollment Management
+    can_manage_enrollments: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_create_enrollments: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_edit_enrollments: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_delete_enrollments: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Payment & Invoice Management
+    can_manage_payments: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_view_payments: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_create_payments: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_manage_invoices: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_create_invoices: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_edit_invoices: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_delete_invoices: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Document Management
+    can_manage_documents: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_view_documents: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_upload_documents: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_delete_documents: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Reports
+    can_view_reports: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_export_reports: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Instructor Management
+    can_manage_instructors: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Settings
+    can_manage_settings: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, 
+        default=datetime.utcnow, 
+        onupdate=datetime.utcnow
+    )
+    updated_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    
+    # Relationship
+    admin: Mapped["User"] = relationship("User", back_populates="admin_permissions", foreign_keys=[admin_id])
+    updater: Mapped[Optional["User"]] = relationship("User", foreign_keys=[updated_by])
 
 
 # ─────────────────────────────────────────────────────────

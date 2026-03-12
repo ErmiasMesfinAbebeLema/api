@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from api.config import settings
-from api.routers import auth, students, documents, courses, enrollments, certificates, payment_methods, payments, invoices, reports
+from api.routers import auth, students, documents, courses, enrollments, certificates, payment_methods, payments, invoices, reports, admin_permissions
 from api.database import engine
 from api.models import Base
 
@@ -30,11 +30,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS
+# Configure CORS - Allow all origins (for development)
+# Note: In production, you should specify exact origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -52,6 +53,7 @@ app.include_router(payment_methods.router, prefix="/api/v1")
 app.include_router(payments.router, prefix="/api/v1")
 app.include_router(invoices.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
+app.include_router(admin_permissions.router, prefix="/api/v1")
 
 # Serve uploaded files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

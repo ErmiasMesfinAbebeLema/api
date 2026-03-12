@@ -53,7 +53,7 @@ async def upload_document(
     description: Optional[str] = None,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="create_student_documents"))
 ):
     # Check if student exists
     result = await db.execute(select(Student).where(Student.id == student_id))
@@ -111,7 +111,7 @@ async def list_documents(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="view_student_documents"))
 ):
     # Check if student exists
     result = await db.execute(select(Student).where(Student.id == student_id))
@@ -147,7 +147,7 @@ async def get_document(
     student_id: int,
     document_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="view_student_documents"))
 ):
     # Check if student exists
     result = await db.execute(select(Student).where(Student.id == student_id))
@@ -182,7 +182,7 @@ async def download_document(
     student_id: int,
     document_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="view_student_documents"))
 ):
     # Check if student exists
     result = await db.execute(select(Student).where(Student.id == student_id))
@@ -276,7 +276,7 @@ async def update_document(
     document_id: int,
     document_update: StudentDocumentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_student_documents"))
 ):
     # Check if student exists
     result = await db.execute(select(Student).where(Student.id == student_id))
@@ -320,7 +320,7 @@ async def delete_document(
     student_id: int,
     document_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="delete_student_documents"))
 ):
     # Check if student exists
     result = await db.execute(select(Student).where(Student.id == student_id))

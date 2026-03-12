@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime, date
-from api.models import UserRole, Gender, EnrollmentStatus, DocumentType, CourseEnrollmentStatus, CertificateStatus, PaymentStatus, InvoiceStatus
+from api.models import UserRole, Gender, EnrollmentStatus, DocumentType, CourseEnrollmentStatus, CertificateStatus, PaymentStatus, InvoiceStatus, AdminPermission
 
 
 # ─────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ class RegisterRequest(UserCreate):
 # ─────────────────────────────────────────────────────────
 
 class Permission(BaseModel):
-    """Permission schema"""
+    """Permission schema - for backward compatibility"""
     can_manage_users: bool = False
     can_manage_students: bool = False
     can_manage_courses: bool = False
@@ -82,9 +82,163 @@ class Permission(BaseModel):
     can_manage_instructors: bool = False
 
 
-def get_permissions(role: UserRole) -> Permission:
-    """Get permissions based on role"""
-    if role == UserRole.ADMIN:
+class AdminPermissionSchema(BaseModel):
+    """Admin permission schema - detailed permissions for each admin"""
+    # User Management
+    can_manage_users: bool = True
+    can_create_users: bool = True
+    can_edit_users: bool = True
+    can_delete_users: bool = True
+    
+    # Student Management
+    can_manage_students: bool = True
+    can_view_students: bool = True
+    can_create_students: bool = True
+    can_edit_students: bool = True
+    can_delete_students: bool = True
+    
+    # Course Management
+    can_manage_courses: bool = True
+    can_create_courses: bool = True
+    can_edit_courses: bool = True
+    can_delete_courses: bool = True
+    
+    # Certificate Management
+    can_manage_certificates: bool = True
+    can_create_certificates: bool = True
+    can_edit_certificates: bool = True
+    can_delete_certificates: bool = True
+    can_revoke_certificates: bool = True
+    
+    # Enrollment Management
+    can_manage_enrollments: bool = True
+    can_create_enrollments: bool = True
+    can_edit_enrollments: bool = True
+    can_delete_enrollments: bool = True
+    
+    # Payment & Invoice Management
+    can_manage_payments: bool = True
+    can_view_payments: bool = True
+    can_create_payments: bool = True
+    can_manage_invoices: bool = True
+    can_create_invoices: bool = True
+    can_edit_invoices: bool = True
+    can_delete_invoices: bool = True
+    
+    # Document Management
+    can_manage_documents: bool = True
+    can_view_documents: bool = True
+    can_upload_documents: bool = True
+    can_delete_documents: bool = True
+    
+    # Reports
+    can_view_reports: bool = True
+    can_export_reports: bool = True
+    
+    # Instructor Management
+    can_manage_instructors: bool = True
+    
+    # Settings
+    can_manage_settings: bool = True
+
+
+class AdminPermissionUpdate(BaseModel):
+    """Schema for updating admin permissions"""
+    # User Management
+    can_manage_users: Optional[bool] = None
+    can_create_users: Optional[bool] = None
+    can_edit_users: Optional[bool] = None
+    can_delete_users: Optional[bool] = None
+    
+    # Student Management
+    can_manage_students: Optional[bool] = None
+    can_view_students: Optional[bool] = None
+    can_create_students: Optional[bool] = None
+    can_edit_students: Optional[bool] = None
+    can_delete_students: Optional[bool] = None
+    
+    # Course Management
+    can_manage_courses: Optional[bool] = None
+    can_create_courses: Optional[bool] = None
+    can_edit_courses: Optional[bool] = None
+    can_delete_courses: Optional[bool] = None
+    
+    # Certificate Management
+    can_manage_certificates: Optional[bool] = None
+    can_create_certificates: Optional[bool] = None
+    can_edit_certificates: Optional[bool] = None
+    can_delete_certificates: Optional[bool] = None
+    can_revoke_certificates: Optional[bool] = None
+    
+    # Enrollment Management
+    can_manage_enrollments: Optional[bool] = None
+    can_create_enrollments: Optional[bool] = None
+    can_edit_enrollments: Optional[bool] = None
+    can_delete_enrollments: Optional[bool] = None
+    
+    # Payment & Invoice Management
+    can_manage_payments: Optional[bool] = None
+    can_view_payments: Optional[bool] = None
+    can_create_payments: Optional[bool] = None
+    can_manage_invoices: Optional[bool] = None
+    can_create_invoices: Optional[bool] = None
+    can_edit_invoices: Optional[bool] = None
+    can_delete_invoices: Optional[bool] = None
+    
+    # Document Management
+    can_manage_documents: Optional[bool] = None
+    can_view_documents: Optional[bool] = None
+    can_upload_documents: Optional[bool] = None
+    can_delete_documents: Optional[bool] = None
+    
+    # Reports
+    can_view_reports: Optional[bool] = None
+    can_export_reports: Optional[bool] = None
+    
+    # Instructor Management
+    can_manage_instructors: Optional[bool] = None
+    
+    # Settings
+    can_manage_settings: Optional[bool] = None
+
+
+class AdminPermissionResponse(AdminPermissionSchema):
+    """Schema for admin permission response"""
+    id: int
+    admin_id: int
+    created_at: datetime
+    updated_at: datetime
+    updated_by: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+def get_permissions(role: UserRole, admin_permission: Optional[AdminPermission] = None) -> Permission:
+    """Get permissions based on role - backward compatible"""
+    if role == UserRole.SUPER_ADMIN:
+        # Super admin has all permissions
+        return Permission(
+            can_manage_users=True,
+            can_manage_students=True,
+            can_manage_courses=True,
+            can_manage_certificates=True,
+            can_view_reports=True,
+            can_manage_instructors=True,
+        )
+    elif role == UserRole.ADMIN:
+        # Check if there's custom permission set for this admin
+        if admin_permission:
+            # Return custom permissions
+            return Permission(
+                can_manage_users=admin_permission.can_manage_users,
+                can_manage_students=admin_permission.can_manage_students,
+                can_manage_courses=admin_permission.can_manage_courses,
+                can_manage_certificates=admin_permission.can_manage_certificates,
+                can_view_reports=admin_permission.can_view_reports,
+                can_manage_instructors=admin_permission.can_manage_instructors,
+            )
+        # Default admin permissions
         return Permission(
             can_manage_users=True,
             can_manage_students=True,
@@ -103,6 +257,133 @@ def get_permissions(role: UserRole) -> Permission:
         )
     else:  # STUDENT
         return Permission()
+
+
+def get_detailed_permissions(role: UserRole, admin_permission: Optional[AdminPermission] = None) -> AdminPermissionSchema:
+    """Get detailed permissions based on role"""
+    if role == UserRole.SUPER_ADMIN:
+        # Super admin has all permissions
+        return AdminPermissionSchema()
+    elif role == UserRole.ADMIN:
+        # Check if there's custom permission set for this admin
+        if admin_permission:
+            return AdminPermissionSchema(
+                can_manage_users=admin_permission.can_manage_users,
+                can_create_users=admin_permission.can_create_users,
+                can_edit_users=admin_permission.can_edit_users,
+                can_delete_users=admin_permission.can_delete_users,
+                can_manage_students=admin_permission.can_manage_students,
+                can_view_students=admin_permission.can_view_students,
+                can_create_students=admin_permission.can_create_students,
+                can_edit_students=admin_permission.can_edit_students,
+                can_delete_students=admin_permission.can_delete_students,
+                can_manage_courses=admin_permission.can_manage_courses,
+                can_create_courses=admin_permission.can_create_courses,
+                can_edit_courses=admin_permission.can_edit_courses,
+                can_delete_courses=admin_permission.can_delete_courses,
+                can_manage_certificates=admin_permission.can_manage_certificates,
+                can_create_certificates=admin_permission.can_create_certificates,
+                can_edit_certificates=admin_permission.can_edit_certificates,
+                can_delete_certificates=admin_permission.can_delete_certificates,
+                can_revoke_certificates=admin_permission.can_revoke_certificates,
+                can_manage_enrollments=admin_permission.can_manage_enrollments,
+                can_create_enrollments=admin_permission.can_create_enrollments,
+                can_edit_enrollments=admin_permission.can_edit_enrollments,
+                can_delete_enrollments=admin_permission.can_delete_enrollments,
+                can_manage_payments=admin_permission.can_manage_payments,
+                can_view_payments=admin_permission.can_view_payments,
+                can_create_payments=admin_permission.can_create_payments,
+                can_manage_invoices=admin_permission.can_manage_invoices,
+                can_create_invoices=admin_permission.can_create_invoices,
+                can_edit_invoices=admin_permission.can_edit_invoices,
+                can_delete_invoices=admin_permission.can_delete_invoices,
+                can_manage_documents=admin_permission.can_manage_documents,
+                can_view_documents=admin_permission.can_view_documents,
+                can_upload_documents=admin_permission.can_upload_documents,
+                can_delete_documents=admin_permission.can_delete_documents,
+                can_view_reports=admin_permission.can_view_reports,
+                can_export_reports=admin_permission.can_export_reports,
+                can_manage_instructors=admin_permission.can_manage_instructors,
+                can_manage_settings=admin_permission.can_manage_settings,
+            )
+        # Default admin permissions (all true)
+        return AdminPermissionSchema()
+    elif role == UserRole.INSTRUCTOR:
+        return AdminPermissionSchema(
+            can_manage_students=True,
+            can_view_students=True,
+            can_create_students=False,
+            can_edit_students=True,
+            can_delete_students=False,
+            can_manage_courses=True,
+            can_create_courses=False,
+            can_edit_courses=True,
+            can_delete_courses=False,
+            can_manage_certificates=True,
+            can_create_certificates=True,
+            can_edit_certificates=False,
+            can_delete_certificates=False,
+            can_revoke_certificates=False,
+            can_manage_enrollments=True,
+            can_create_enrollments=True,
+            can_edit_enrollments=True,
+            can_delete_enrollments=False,
+            can_manage_payments=False,
+            can_view_payments=False,
+            can_create_payments=False,
+            can_manage_invoices=False,
+            can_create_invoices=False,
+            can_edit_invoices=False,
+            can_delete_invoices=False,
+            can_manage_documents=False,
+            can_view_documents=True,
+            can_upload_documents=False,
+            can_delete_documents=False,
+            can_view_reports=True,
+            can_export_reports=False,
+            can_manage_instructors=False,
+            can_manage_settings=False,
+        )
+    else:  # STUDENT
+        return AdminPermissionSchema(
+            can_manage_users=False,
+            can_create_users=False,
+            can_edit_users=False,
+            can_delete_users=False,
+            can_manage_students=False,
+            can_view_students=False,
+            can_create_students=False,
+            can_edit_students=False,
+            can_delete_students=False,
+            can_manage_courses=False,
+            can_create_courses=False,
+            can_edit_courses=False,
+            can_delete_courses=False,
+            can_manage_certificates=False,
+            can_create_certificates=False,
+            can_edit_certificates=False,
+            can_delete_certificates=False,
+            can_revoke_certificates=False,
+            can_manage_enrollments=False,
+            can_create_enrollments=False,
+            can_edit_enrollments=False,
+            can_delete_enrollments=False,
+            can_manage_payments=False,
+            can_view_payments=False,
+            can_create_payments=False,
+            can_manage_invoices=False,
+            can_create_invoices=False,
+            can_edit_invoices=False,
+            can_delete_invoices=False,
+            can_manage_documents=False,
+            can_view_documents=False,
+            can_upload_documents=False,
+            can_delete_documents=False,
+            can_view_reports=False,
+            can_export_reports=False,
+            can_manage_instructors=False,
+            can_manage_settings=False,
+        )
 
 
 # ─────────────────────────────────────────────────────────

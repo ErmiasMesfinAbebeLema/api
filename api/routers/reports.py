@@ -8,7 +8,8 @@ from collections import defaultdict
 
 from api.database import get_db
 from api.models import User, Payment, Student, Enrollment, Course, PaymentMethod, PaymentStatus
-from api.routers.auth import get_current_active_user, require_role
+from api.routers.auth import get_current_active_user
+from api.auth import require_role
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -18,7 +19,7 @@ async def get_revenue_report(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="view_reports"))
 ):
     """Get revenue report - total revenue within date range"""
     # Default to current month if no dates provided
@@ -88,7 +89,7 @@ async def get_payments_by_method(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="view_reports"))
 ):
     """Get payments grouped by payment method"""
     if not start_date:
@@ -125,7 +126,7 @@ async def get_payments_by_course(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="view_reports"))
 ):
     """Get payments grouped by course"""
     if not start_date:
@@ -163,7 +164,7 @@ async def get_payments_by_course(
 @router.get("/dashboard-summary")
 async def get_dashboard_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="view_reports"))
 ):
     """Get summary data for dashboard"""
     today = date.today()

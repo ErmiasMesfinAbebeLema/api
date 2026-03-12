@@ -22,7 +22,7 @@ async def list_courses(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_courses"))
 ):
     """List all active courses"""
     # Get active courses
@@ -48,7 +48,7 @@ async def list_courses(
 async def get_course(
     course_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_courses"))
 ):
     """Get a specific course"""
     result = await db.execute(select(Course).where(Course.id == course_id))
@@ -67,7 +67,7 @@ async def get_course(
 async def create_course(
     course: CourseCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="create_courses"))
 ):
     """Create a new course (admin only)"""
     db_course = Course(
@@ -91,7 +91,7 @@ async def update_course(
     course_id: int,
     course_update: CourseUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_courses"))
 ):
     """Update a course (admin only)"""
     result = await db.execute(select(Course).where(Course.id == course_id))
@@ -120,7 +120,7 @@ async def update_course(
 async def delete_course(
     course_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="delete_courses"))
 ):
     """Delete a course (soft delete - just set inactive)"""
     result = await db.execute(select(Course).where(Course.id == course_id))

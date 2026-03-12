@@ -20,7 +20,8 @@ from api.schemas import (
     InvoiceWithItems,
     InvoiceItemCreate
 )
-from api.routers.auth import get_current_active_user, require_role
+from api.routers.auth import get_current_active_user
+from api.auth import require_role
 from api.services.pdf_generator import generate_invoice_pdf_bytes, save_invoice_pdf
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
@@ -95,7 +96,7 @@ async def list_invoices(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"], required_permission="view_invoices"))
 ):
     """List all invoices with optional filters"""
     stmt = select(Invoice).options(
@@ -142,7 +143,7 @@ async def list_invoices(
 async def get_student_invoices(
     student_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"], required_permission="view_invoices"))
 ):
     """Get all invoices for a specific student"""
     stmt = select(Invoice).where(Invoice.student_id == student_id).options(
@@ -157,7 +158,7 @@ async def get_student_invoices(
 async def get_invoice(
     invoice_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"], required_permission="view_invoices"))
 ):
     """Get a specific invoice with items"""
     stmt = select(Invoice).where(Invoice.id == invoice_id).options(
@@ -180,7 +181,7 @@ async def get_invoice(
 async def create_invoice(
     invoice_data: InvoiceCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="create_invoices"))
 ):
     """Create a new invoice (Admin only)"""
     # Verify student exists
@@ -309,7 +310,7 @@ async def update_invoice(
     invoice_id: int,
     invoice_data: InvoiceUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_invoices"))
 ):
     """Update an invoice (Admin only)"""
     stmt = select(Invoice).where(Invoice.id == invoice_id)
@@ -340,7 +341,7 @@ async def update_invoice(
 async def delete_invoice(
     invoice_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="delete_invoices"))
 ):
     """Delete an invoice (Admin only)"""
     stmt = select(Invoice).where(Invoice.id == invoice_id)
@@ -363,7 +364,7 @@ async def delete_invoice(
 async def generate_invoice_pdf_endpoint(
     invoice_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_invoices"))
 ):
     """Generate PDF for an invoice (Admin only)"""
     stmt = select(Invoice).where(Invoice.id == invoice_id).options(
@@ -396,7 +397,7 @@ async def generate_invoice_pdf_endpoint(
 async def download_invoice_pdf(
     invoice_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"], required_permission="view_invoices"))
 ):
     """Download invoice PDF"""
     stmt = select(Invoice).where(Invoice.id == invoice_id)

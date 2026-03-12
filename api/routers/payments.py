@@ -12,7 +12,8 @@ from api.schemas import (
     PaymentUpdate,
     PaymentResponse
 )
-from api.routers.auth import get_current_active_user, require_role
+from api.routers.auth import get_current_active_user
+from api.auth import require_role
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -28,7 +29,7 @@ async def list_payments(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"], required_permission="view_payments"))
 ):
     """List all payments with optional filters"""
     stmt = select(Payment).options(
@@ -67,7 +68,7 @@ async def list_payments(
 async def get_student_payments(
     student_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"], required_permission="view_payments"))
 ):
     """Get all payments for a specific student"""
     stmt = select(Payment).where(Payment.student_id == student_id).options(
@@ -84,7 +85,7 @@ async def get_student_payments(
 async def get_enrollment_payments(
     enrollment_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"], required_permission="view_payments"))
 ):
     """Get all payments for a specific enrollment"""
     stmt = select(Payment).where(Payment.enrollment_id == enrollment_id).options(
@@ -100,7 +101,7 @@ async def get_enrollment_payments(
 async def get_payment(
     payment_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"], required_permission="view_payments"))
 ):
     """Get a specific payment"""
     stmt = select(Payment).where(Payment.id == payment_id).options(
@@ -124,7 +125,7 @@ async def get_payment(
 async def create_payment(
     payment_data: PaymentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="create_payments"))
 ):
     """Record a new payment (Admin only)"""
     # Verify student exists
@@ -205,7 +206,7 @@ async def update_payment(
     payment_id: int,
     payment_data: PaymentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_payments"))
 ):
     """Update a payment (Admin only)"""
     stmt = select(Payment).where(Payment.id == payment_id)
@@ -249,7 +250,7 @@ async def update_payment(
 async def delete_payment(
     payment_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="delete_payments"))
 ):
     """Delete a payment (Admin only)"""
     stmt = select(Payment).where(Payment.id == payment_id)

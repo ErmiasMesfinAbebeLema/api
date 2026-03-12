@@ -8,7 +8,7 @@ import os
 import shutil
 
 from api.database import get_db
-from api.models import User
+from api.models import User, AdminPermission, UserRole
 from api.schemas import (
     UserCreate, 
     UserResponse, 
@@ -168,10 +168,18 @@ async def get_current_user_info(
 
 @router.get("/me/permissions", response_model=Permission)
 async def get_current_user_permissions(
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """Get current user permissions based on role"""
-    return get_permissions(current_user.role)
+    # For admins, check if there are custom permissions
+    admin_permission = None
+    if current_user.role == UserRole.ADMIN:
+        stmt = select(AdminPermission).where(AdminPermission.admin_id == current_user.id)
+        result = await db.execute(stmt)
+        admin_permission = result.scalar_one_or_none()
+    
+    return get_permissions(current_user.role, admin_permission)
 
 
 @router.patch("/me", response_model=UserResponse)
@@ -336,7 +344,7 @@ async def delete_profile_photo(
 async def create_user(
     user_data: UserCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="create_users"))
 ):
     """Create new user (Admin only)"""
     # Check if email already exists
@@ -418,7 +426,7 @@ async def update_user(
     user_id: int,
     user_data: UserUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_users"))
 ):
     """Update user (Admin only)"""
     stmt = select(User).where(User.id == user_id)
@@ -473,7 +481,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="delete_users"))
 ):
     """Delete user (Admin only)"""
     # Cannot delete yourself
@@ -503,7 +511,7 @@ async def delete_user(
 async def activate_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_users"))
 ):
     """Activate user account (Admin only)"""
     stmt = select(User).where(User.id == user_id)
@@ -527,7 +535,7 @@ async def activate_user(
 async def deactivate_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_users"))
 ):
     """Deactivate user account (Admin only)"""
     # Cannot deactivate yourself

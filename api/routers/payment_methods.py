@@ -10,7 +10,8 @@ from api.schemas import (
     PaymentMethodUpdate,
     PaymentMethodResponse
 )
-from api.routers.auth import get_current_active_user, require_role
+from api.routers.auth import get_current_active_user
+from api.auth import require_role
 
 router = APIRouter(prefix="/payment-methods", tags=["Payment Methods"])
 
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/payment-methods", tags=["Payment Methods"])
 @router.get("", response_model=List[PaymentMethodResponse])
 async def list_payment_methods(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"], required_permission="view_payment_methods"))
 ):
     """List all payment methods"""
     stmt = select(PaymentMethod).order_by(PaymentMethod.name)
@@ -30,7 +31,7 @@ async def list_payment_methods(
 async def get_payment_method(
     method_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_role(["admin"], required_permission="view_payment_methods"))
 ):
     """Get a specific payment method"""
     stmt = select(PaymentMethod).where(PaymentMethod.id == method_id)
@@ -50,7 +51,7 @@ async def get_payment_method(
 async def create_payment_method(
     method_data: PaymentMethodCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="create_payment_methods"))
 ):
     """Create a new payment method (Admin only)"""
     method = PaymentMethod(**method_data.model_dump())
@@ -65,7 +66,7 @@ async def update_payment_method(
     method_id: int,
     method_data: PaymentMethodUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_payment_methods"))
 ):
     """Update a payment method (Admin only)"""
     stmt = select(PaymentMethod).where(PaymentMethod.id == method_id)
@@ -90,7 +91,7 @@ async def update_payment_method(
 async def delete_payment_method(
     method_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="delete_payment_methods"))
 ):
     """Deactivate a payment method (Admin only) - soft delete"""
     stmt = select(PaymentMethod).where(PaymentMethod.id == method_id)

@@ -65,7 +65,7 @@ async def list_templates(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="view_certificate_templates"))
 ):
     """List all certificate templates"""
     result = await db.execute(
@@ -86,7 +86,7 @@ async def list_templates(
 async def get_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="view_certificate_templates"))
 ):
     """Get a specific template"""
     result = await db.execute(
@@ -107,7 +107,7 @@ async def get_template(
 async def create_template(
     template: CertificateTemplateCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="create_certificate_templates"))
 ):
     """Create a new certificate template"""
     db_template = CertificateTemplate(
@@ -131,7 +131,7 @@ async def update_template(
     template_id: int,
     template_update: CertificateTemplateUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_certificate_templates"))
 ):
     """Update a certificate template"""
     result = await db.execute(
@@ -161,7 +161,7 @@ async def update_template(
 async def delete_template(
     template_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="delete_certificate_templates"))
 ):
     """Delete a certificate template"""
     result = await db.execute(
@@ -201,7 +201,7 @@ async def list_certificates(
     status: Optional[CertificateStatus] = None,
     search: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_certificates"))
 ):
     """List all certificates with optional filters"""
     query = select(Certificate).order_by(Certificate.created_at.desc())
@@ -237,7 +237,7 @@ async def list_certificates(
 @admin_certificates_router.get("/stats", response_model=CertificateStats)
 async def get_certificate_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_certificates"))
 ):
     """Get certificate statistics"""
     # Total certificates
@@ -309,7 +309,7 @@ async def get_certificate_stats(
 async def get_certificate(
     certificate_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_certificates"))
 ):
     """Get a specific certificate with details"""
     result = await db.execute(
@@ -366,7 +366,7 @@ async def get_certificate(
 async def create_certificate(
     cert_data: CertificateCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="create_certificates"))
 ):
     """Issue a certificate to a student"""
     # Check if student exists
@@ -467,7 +467,7 @@ async def create_certificate(
 async def create_bulk_certificates(
     cert_data: CertificateCreateBulk,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="create_certificates"))
 ):
     """Issue certificates to multiple students"""
     # Check if course exists
@@ -544,7 +544,7 @@ async def revoke_certificate(
     certificate_id: int,
     revoke_data: CertificateRevoke,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="edit_certificates"))
 ):
     """Revoke a certificate"""
     result = await db.execute(
@@ -580,7 +580,7 @@ async def revoke_certificate(
 async def download_certificate(
     certificate_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_certificates"))
 ):
     """Download certificate PDF"""
     result = await db.execute(

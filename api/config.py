@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://root:root@localhost:5432/db1010"
     
     # CORS - accept both list and string formats
-    cors_origins: list = ["http://localhost:3000", "http://localhost:3001"]
+    cors_origins: list = ["*"]
     
     # JWT Authentication
     secret_key: str = "your-super-secret-key-change-in-production"

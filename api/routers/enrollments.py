@@ -32,7 +32,7 @@ async def list_enrollments(
     course_id: Optional[int] = None,
     status: Optional[CourseEnrollmentStatus] = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_enrollments"))
 ):
     """List all enrollments with optional filters"""
     query = select(Enrollment)
@@ -96,7 +96,7 @@ async def list_enrollments(
 async def get_enrollment(
     enrollment_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_enrollments"))
 ):
     """Get a specific enrollment with details"""
     result = await db.execute(select(Enrollment).where(Enrollment.id == enrollment_id))
@@ -155,7 +155,7 @@ async def get_enrollment(
 async def create_enrollment(
     enrollment: EnrollmentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="create_enrollments"))
 ):
     """Create a new enrollment"""
     # Check if student exists
@@ -325,7 +325,7 @@ async def update_enrollment(
     enrollment_id: int,
     enrollment_update: EnrollmentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="edit_enrollments"))
 ):
     """Update an enrollment"""
     result = await db.execute(select(Enrollment).where(Enrollment.id == enrollment_id))
@@ -354,7 +354,7 @@ async def update_enrollment(
 async def delete_enrollment(
     enrollment_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"]))
+    current_user: User = Depends(require_role(["admin"], required_permission="delete_enrollments"))
 ):
     """Delete an enrollment"""
     result = await db.execute(select(Enrollment).where(Enrollment.id == enrollment_id))
@@ -387,7 +387,7 @@ async def get_student_enrollments(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor", "student"]))
+    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_enrollments"))
 ):
     """Get all enrollments for a specific student"""
     # Get enrollments

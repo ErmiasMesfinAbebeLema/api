@@ -4,10 +4,10 @@ import sys
 from pathlib import Path
 
 # Add parent directory to sys.path for docker container
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from passlib.context import CryptContext
-from sqlalchemy import select
+from sqlalchemy import select, text
 from api.database import async_session_maker
 from api.models import User, UserRole
 
@@ -30,6 +30,25 @@ async def create_admin(role: str = "admin"):
     user_role = role_map.get(role.lower(), UserRole.ADMIN)
     
     async with async_session_maker() as session:
+        # First, let's verify the enum values in the database
+        try:
+            result = await session.execute(
+                text("SELECT enumlabel FROM pg_enum WHERE enumtypid = (SELECT oid FROM pg_type WHERE typname = 'userrole') ORDER BY enumsortorder")
+            )
+            values = result.fetchall()
+            print("Current userrole enum values in database:")
+            for v in values:
+                print(f"  - {v[0]}")
+            
+            # Check if super_admin exists
+            super_admin_exists = any(v[0] == 'super_admin' for v in values)
+            if not super_admin_exists:
+                print("\nERROR: super_admin does not exist in database enum!")
+                print("Please run add_super_admin.py first to add the enum value.")
+                return
+        except Exception as e:
+            print(f"Error checking enum: {e}")
+        
         # Check if user exists
         stmt = select(User).where(User.email == email)
         result = await session.execute(stmt)
@@ -39,7 +58,7 @@ async def create_admin(role: str = "admin"):
             # Update role if user exists
             existing_user.role = user_role
             await session.commit()
-            print(f"User {email} role updated to {user_role.value}!")
+            print(f"\nUser {email} role updated to {user_role.value}!")
             return
         
         # Create admin user
@@ -56,7 +75,7 @@ async def create_admin(role: str = "admin"):
         await session.commit()
         await session.refresh(admin_user)
         
-        print(f"Admin user created successfully!")
+        print(f"\nAdmin user created successfully!")
         print(f"Email: {email}")
         print(f"Password: {password}")
         print(f"Role: {admin_user.role.value}")
