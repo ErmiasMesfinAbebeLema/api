@@ -9,14 +9,14 @@ from pathlib import Path
 from datetime import datetime
 
 from api.database import get_db
-from api.models import StudentDocument, Student, User, DocumentType
+from api.models import StudentDocument, Student, User, DocumentType, UserRole
 from api.schemas import (
     StudentDocumentCreate,
     StudentDocumentResponse,
     StudentDocumentUpdate,
     StudentDocumentList
 )
-from api.auth import require_role
+from api.auth import require_role, get_current_active_user
 
 router = APIRouter(prefix="/students/{student_id}/documents", tags=["Student Documents"])
 
@@ -111,16 +111,33 @@ async def list_documents(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"], required_permission="view_student_documents"))
+    current_user: User = Depends(get_current_active_user)
 ):
-    # Check if student exists
-    result = await db.execute(select(Student).where(Student.id == student_id))
-    student = result.scalar_one_or_none()
-    
-    if not student:
+    # Check if user is admin
+    if current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        # Admin can view any student's documents
+        pass
+    elif current_user.role == UserRole.STUDENT:
+        # Students can only view their own documents
+        result = await db.execute(select(Student).where(Student.id == student_id))
+        student = result.scalar_one_or_none()
+        
+        if not student:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student not found"
+            )
+        
+        # Check if this is the student's own record
+        if student.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own documents"
+            )
+    else:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Student not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
         )
     
     # Get documents
@@ -147,16 +164,23 @@ async def get_document(
     student_id: int,
     document_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"], required_permission="view_student_documents"))
+    current_user: User = Depends(get_current_active_user)
 ):
-    # Check if student exists
-    result = await db.execute(select(Student).where(Student.id == student_id))
-    student = result.scalar_one_or_none()
-    
-    if not student:
+    # Check if user is admin
+    if current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        pass
+    elif current_user.role == UserRole.STUDENT:
+        result = await db.execute(select(Student).where(Student.id == student_id))
+        student = result.scalar_one_or_none()
+        if not student or student.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own documents"
+            )
+    else:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Student not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
         )
     
     # Get document
@@ -182,16 +206,23 @@ async def download_document(
     student_id: int,
     document_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"], required_permission="view_student_documents"))
+    current_user: User = Depends(get_current_active_user)
 ):
-    # Check if student exists
-    result = await db.execute(select(Student).where(Student.id == student_id))
-    student = result.scalar_one_or_none()
-    
-    if not student:
+    # Check if user is admin
+    if current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        pass
+    elif current_user.role == UserRole.STUDENT:
+        result = await db.execute(select(Student).where(Student.id == student_id))
+        student = result.scalar_one_or_none()
+        if not student or student.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only download your own documents"
+            )
+    else:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Student not found"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
         )
     
     # Get document

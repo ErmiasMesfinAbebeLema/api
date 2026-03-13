@@ -55,6 +55,9 @@ admin_certificates_router = APIRouter(prefix="/admin/certificates", tags=["Certi
 # Public Router
 public_certificates_router = APIRouter(prefix="", tags=["Certificates - Public"])
 
+# Student Router - for students to view their own certificates
+student_certificates_router = APIRouter(prefix="/student/certificates", tags=["Certificates - Student"])
+
 
 # ─────────────────────────────────────────────────────────
 # Certificate Templates Endpoints
@@ -695,4 +698,165 @@ async def verify_certificate(
             issuer=certificate.issuer
         ),
         message="Certificate is valid"
+    )
+
+
+# ─────────────────────────────────────────────────────────
+# Student Certificate Endpoints
+# ─────────────────────────────────────────────────────────
+
+@student_certificates_router.get("", response_model=CertificateList)
+async def get_my_certificates(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["student"]))
+):
+    """Get current student's certificates"""
+    # Get the student profile for the current user
+    result = await db.execute(
+        select(Student).where(Student.user_id == current_user.id)
+    )
+    student = result.scalar_one_or_none()
+    
+    if not student:
+        return {"certificates": [], "total": 0}
+    
+    # Get certificates for this student
+    query = (
+        select(Certificate)
+        .where(Certificate.student_id == student.id)
+        .order_by(Certificate.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    
+    result = await db.execute(query)
+    certificates = result.scalars().all()
+    
+    # Get total count
+    count_query = select(Certificate).where(Certificate.student_id == student.id)
+    count_result = await db.execute(count_query)
+    total = len(count_result.scalars().all())
+    
+    return {"certificates": certificates, "total": total}
+
+
+@student_certificates_router.get("/{certificate_id}", response_model=CertificateResponseWithDetails)
+async def get_my_certificate(
+    certificate_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["student"]))
+):
+    """Get a specific certificate for the current student"""
+    # Get the student profile for the current user
+    result = await db.execute(
+        select(Student).where(Student.user_id == current_user.id)
+    )
+    student = result.scalar_one_or_none()
+    
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found"
+        )
+    
+    # Get the certificate
+    result = await db.execute(
+        select(Certificate)
+        .options(
+            selectinload(Certificate.student).selectinload(Student.user),
+            selectinload(Certificate.course),
+            selectinload(Certificate.template),
+            selectinload(Certificate.issuer)
+        )
+        .where(Certificate.id == certificate_id)
+    )
+    certificate = result.scalar_one_or_none()
+    
+    if not certificate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certificate not found"
+        )
+    
+    # Verify the certificate belongs to the current student
+    if certificate.student_id != student.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to view this certificate"
+        )
+    
+    return certificate
+
+
+@student_certificates_router.get("/{certificate_id}/download")
+async def download_my_certificate(
+    certificate_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["student"]))
+):
+    """Download a specific certificate PDF for the current student"""
+    # Get the student profile for the current user
+    result = await db.execute(
+        select(Student).where(Student.user_id == current_user.id)
+    )
+    student = result.scalar_one_or_none()
+    
+    if not student:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found"
+        )
+    
+    # Get the certificate
+    result = await db.execute(
+        select(Certificate).where(Certificate.id == certificate_id)
+    )
+    certificate = result.scalar_one_or_none()
+    
+    if not certificate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certificate not found"
+        )
+    
+    # Verify the certificate belongs to the current student
+    if certificate.student_id != student.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to download this certificate"
+        )
+    
+    # Check if certificate is revoked or expired
+    if certificate.status == CertificateStatus.REVOKED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This certificate has been revoked and cannot be downloaded"
+        )
+    
+    if certificate.expiry_date and certificate.expiry_date < date.today():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This certificate has expired and cannot be downloaded"
+        )
+    
+    if not certificate.pdf_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF not generated yet"
+        )
+    
+    file_path = Path(certificate.pdf_url.lstrip("/"))
+    
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF file not found"
+        )
+    
+    return FileResponse(
+        path=str(file_path),
+        filename=f"{certificate.certificate_number}.pdf",
+        media_type="application/pdf"
     )

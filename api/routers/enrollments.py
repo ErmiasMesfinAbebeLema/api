@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from api.database import get_db
-from api.models import User, Student, Course, Enrollment, CourseEnrollmentStatus, Invoice, InvoiceItem, Payment, PaymentStatus, InvoiceStatus
+from api.models import User, Student, Course, Enrollment, CourseEnrollmentStatus, Invoice, InvoiceItem, Payment, PaymentStatus, InvoiceStatus, UserRole
 from api.schemas import (
     EnrollmentCreate,
     EnrollmentUpdate,
@@ -17,7 +17,7 @@ from api.schemas import (
     EnrollmentResponseWithDetails,
     EnrollmentList
 )
-from api.auth import require_role
+from api.auth import require_role, get_current_active_user
 from api.routers.invoices import generate_invoice_number
 from api.services.pdf_generator import generate_invoice_pdf_bytes, save_invoice_pdf
 
@@ -387,9 +387,37 @@ async def get_student_enrollments(
     skip: int = 0,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin", "instructor"], required_permission="view_enrollments"))
+    current_user: User = Depends(get_current_active_user)
 ):
-    """Get all enrollments for a specific student"""
+    """Get all enrollments for a specific student (admin, instructor, or the student themselves)"""
+    # Check if user is admin or instructor
+    if current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN, UserRole.INSTRUCTOR]:
+        # Admin/Instructor can view any student's enrollments
+        pass
+    elif current_user.role == UserRole.STUDENT:
+        # Students can only view their own enrollments
+        stmt = select(Student).where(Student.id == student_id)
+        result = await db.execute(stmt)
+        student = result.scalar_one_or_none()
+        
+        if not student:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student not found"
+            )
+        
+        # Check if this is the student's own record
+        if student.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own enrollments"
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+    
     # Get enrollments
     result = await db.execute(
         select(Enrollment)

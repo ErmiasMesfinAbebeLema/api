@@ -916,6 +916,7 @@ class PaymentResponse(PaymentBase):
     created_at: datetime
     updated_at: datetime
     invoice_number: Optional[str] = None
+    payment_method: Optional[PaymentMethodResponse] = None
 
     class Config:
         from_attributes = True

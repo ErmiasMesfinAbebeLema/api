@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from api.database import get_db
-from api.models import User, Invoice, InvoiceItem, Student, Enrollment, InvoiceStatus
+from api.models import User, Invoice, InvoiceItem, Student, Enrollment, InvoiceStatus, UserRole
 from api.schemas import (
     InvoiceCreate,
     InvoiceUpdate,
@@ -143,9 +143,37 @@ async def list_invoices(
 async def get_student_invoices(
     student_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["admin"], required_permission="view_invoices"))
+    current_user: User = Depends(get_current_active_user)
 ):
-    """Get all invoices for a specific student"""
+    """Get all invoices for a specific student (admin or the student themselves)"""
+    # Check if user is admin
+    if current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        # Admin can view any student's invoices
+        pass
+    elif current_user.role == UserRole.STUDENT:
+        # Students can only view their own invoices
+        stmt = select(Student).where(Student.id == student_id)
+        result = await db.execute(stmt)
+        student = result.scalar_one_or_none()
+        
+        if not student:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student not found"
+            )
+        
+        # Check if this is the student's own record
+        if student.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own invoices"
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+    
     stmt = select(Invoice).where(Invoice.student_id == student_id).options(
         selectinload(Invoice.student).selectinload(Student.user)
     ).order_by(Invoice.issue_date.desc())
