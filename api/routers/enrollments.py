@@ -72,10 +72,16 @@ async def list_enrollments(
         paid_result = await db.execute(paid_stmt)
         total_paid = float(paid_result.scalar() or 0)
         
+        # Get course name
+        course_stmt = select(Course.name).where(Course.id == enrollment.course_id)
+        course_result = await db.execute(course_stmt)
+        course_name = course_result.scalar()
+        
         enrollment_responses.append(EnrollmentResponse(
             id=enrollment.id,
             student_id=enrollment.student_id,
             course_id=enrollment.course_id,
+            course_name=course_name,
             fee=enrollment.fee,
             status=enrollment.status,
             enrolled_at=enrollment.enrolled_at,
@@ -445,10 +451,16 @@ async def get_student_enrollments(
         paid_result = await db.execute(paid_stmt)
         total_paid = float(paid_result.scalar() or 0)
         
+        # Get course name
+        course_stmt = select(Course.name).where(Course.id == enrollment.course_id)
+        course_result = await db.execute(course_stmt)
+        course_name = course_result.scalar()
+        
         enrollment_responses.append(EnrollmentResponse(
             id=enrollment.id,
             student_id=enrollment.student_id,
             course_id=enrollment.course_id,
+            course_name=course_name,
             fee=enrollment.fee,
             status=enrollment.status,
             enrolled_at=enrollment.enrolled_at,

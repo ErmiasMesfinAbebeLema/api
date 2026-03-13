@@ -669,6 +669,7 @@ class EnrollmentResponse(EnrollmentBase):
     """Schema for enrollment response"""
     id: int
     student_id: int
+    course_name: Optional[str] = None  # Course name for display
     enrolled_at: datetime
     created_at: datetime
     updated_at: datetime
