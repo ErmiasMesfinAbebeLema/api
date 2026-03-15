@@ -278,7 +278,7 @@ INVOICE_HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
   <div class="header">
     <div class="header-left">
-      <div class="company-info"><strong>YM International Beauty Academy</strong><br>Shashemene, Oromia, Ethiopia<br>Abosto Area<br>Phone: +251 912 667 152<br>+251 954 811 648<br>+251 916 822 446<br>+251 916 858 323<br>Email: info@ymbeautyacademy.com</div>
+      <div class="company-info"><strong>YM International Beauty Academy</strong><br>Shashemene, Oromia, Ethiopia<br>Phone: +251 912 667 152<br>Email: info@ymbeautyacademy.com</div>
     </div>
     <div class="invoice-meta">
       <div class="invoice-title">Invoice</div>
@@ -334,15 +334,8 @@ INVOICE_HTML_TEMPLATE = """<!DOCTYPE html>
     <div class="sender-details">
       <strong>YM International Beauty Academy</strong><br>
       Shashemene, Oromia, Ethiopia<br>
-      Abosto Area<br><br>
       Phone: +251 912 667 152<br>
-      +251 954 811 648<br>
-      +251 916 822 446<br>
-      +251 916 858 323<br>
-      Email: info@ymbeautyacademy.com<br><br>
-      Working Hours:<br>
-      Monday – Friday: 8:00 AM – 6:00 PM<br>
-      Saturday: 9:00 AM – 4:00 PM
+      Email: info@ymbeautyacademy.com
     </div>
 
     
