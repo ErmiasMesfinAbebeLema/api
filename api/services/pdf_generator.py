@@ -278,7 +278,7 @@ INVOICE_HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
   <div class="header">
     <div class="header-left">
-      <div class="company-info"><strong>Mulat Beauty Training Institute</strong><br>Addis Ababa, Ethiopia<br>Phone: +251 911 123 456<br>Email: info@mulatbeauty.edu.et</div>
+      <div class="company-info"><strong>YM International Beauty Academy</strong><br>Shashemene, Oromia, Ethiopia<br>Abosto Area<br>Phone: +251 912 667 152<br>+251 954 811 648<br>+251 916 822 446<br>+251 916 858 323<br>Email: info@ymbeautyacademy.com</div>
     </div>
     <div class="invoice-meta">
       <div class="invoice-title">Invoice</div>
@@ -332,10 +332,17 @@ INVOICE_HTML_TEMPLATE = """<!DOCTYPE html>
 
   <div class="bottom-container">
     <div class="sender-details">
-      <strong>Mulat Beauty Training Institute</strong><br>
-      Addis Ababa, Ethiopia<br><br>
-      Phone: +251 911 123 456<br>
-      Email: info@mulatbeauty.edu.et
+      <strong>YM International Beauty Academy</strong><br>
+      Shashemene, Oromia, Ethiopia<br>
+      Abosto Area<br><br>
+      Phone: +251 912 667 152<br>
+      +251 954 811 648<br>
+      +251 916 822 446<br>
+      +251 916 858 323<br>
+      Email: info@ymbeautyacademy.com<br><br>
+      Working Hours:<br>
+      Monday – Friday: 8:00 AM – 6:00 PM<br>
+      Saturday: 9:00 AM – 4:00 PM
     </div>
 
     

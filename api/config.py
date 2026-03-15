@@ -7,10 +7,10 @@ class Settings(BaseSettings):
     """Application settings"""
     
     # Database
-    database_url: str = "postgresql+asyncpg://root:root@localhost:5432/db1010"
+    database_url: str = "postgresql+asyncpg://root:root@database_postgres:5432/db1010"
     
     # CORS - accept both list and string formats
-    cors_origins: list = ["*"]
+    cors_origins: list = ["https://yminternationalbeautyacademy.com"]
     
     # JWT Authentication
     secret_key: str = "your-super-secret-key-change-in-production"
