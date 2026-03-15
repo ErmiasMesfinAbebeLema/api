@@ -187,6 +187,25 @@ INVOICE_HTML_TEMPLATE = """<!DOCTYPE html>
       padding: 20px;
     }
 
+    /* PAID Watermark Styles */
+    .watermark {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      font-size: 120px;
+      font-weight: bold;
+      color: rgba(34, 197, 94, 0.15);
+      text-transform: uppercase;
+      pointer-events: none;
+      z-index: 1000;
+      white-space: nowrap;
+    }
+
+    .watermark.paid {
+      color: rgba(34, 197, 94, 0.25);
+    }
+
     .header {
       display: flex;
       justify-content: space-between;
@@ -276,12 +295,15 @@ INVOICE_HTML_TEMPLATE = """<!DOCTYPE html>
   </style>
 </head>
 <body>
+  {% if is_paid %}
+  <div class="watermark paid">PAID</div>
+  {% endif %}
   <div class="header">
     <div class="header-left">
       <div class="company-info"><strong>YM International Beauty Academy</strong><br>Shashemene, Oromia, Ethiopia<br>Phone: +251 912 667 152<br>Email: info@ymbeautyacademy.com</div>
     </div>
     <div class="invoice-meta">
-      <div class="invoice-title">Invoice</div>
+      <div class="invoice-title">{% if is_paid %}Receipt{% else %}Invoice{% endif %}</div>
       <div><strong>Invoice No.:</strong> {{invoice_number}}</div>
       <div><strong>Date:</strong> {{issue_date}}</div>
       <div><strong>Due Date:</strong> {{due_date}}</div>
@@ -356,10 +378,14 @@ def generate_invoice_pdf_bytes(
     discount: float,
     tax: float,
     grand_total: float,
-    tax_rate: float = 15
+    tax_rate: float = 15,
+    is_paid: bool = False
 ) -> bytes:
     """
     Generate PDF for invoice using the provided template
+    
+    Args:
+        is_paid: If True, shows "Receipt" title and PAID watermark
     
     Returns:
         PDF as bytes
@@ -381,7 +407,8 @@ def generate_invoice_pdf_bytes(
         discount=discount,
         tax=tax,
         grand_total=grand_total,
-        tax_rate=tax_rate
+        tax_rate=tax_rate,
+        is_paid=is_paid
     )
     
     # Generate PDF using WeasyPrint

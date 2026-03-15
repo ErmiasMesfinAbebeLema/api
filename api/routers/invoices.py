@@ -38,7 +38,7 @@ def generate_invoice_number() -> str:
     return f"INV-{year}-{random_part}"
 
 
-async def generate_invoice_pdf(invoice: Invoice, items: List[InvoiceItem], student: Student) -> str:
+async def generate_invoice_pdf(invoice: Invoice, items: List[InvoiceItem], student: Student, is_paid: bool = False) -> str:
     """Generate PDF for invoice and return the file path"""
     # Prepare items for template
     items_data = [
@@ -65,6 +65,9 @@ async def generate_invoice_pdf(invoice: Invoice, items: List[InvoiceItem], stude
     if invoice.total_amount > invoice.discount_amount:
         tax_rate = round((invoice.tax_amount / (invoice.total_amount - invoice.discount_amount)) * 100, 2)
     
+    # Determine PDF filename - use different name for paid invoices
+    pdf_filename = f"{invoice.invoice_number}_paid.pdf" if is_paid else f"{invoice.invoice_number}.pdf"
+    
     # Generate PDF bytes
     pdf_bytes = generate_invoice_pdf_bytes(
         invoice_number=invoice.invoice_number,
@@ -78,11 +81,12 @@ async def generate_invoice_pdf(invoice: Invoice, items: List[InvoiceItem], stude
         discount=f"{invoice.discount_amount:,.2f}",
         tax=f"{invoice.tax_amount:,.2f}",
         grand_total=f"{invoice.grand_total:,.2f}",
-        tax_rate=tax_rate
+        tax_rate=tax_rate,
+        is_paid=is_paid
     )
     
     # Save PDF to storage
-    pdf_path = save_invoice_pdf(pdf_bytes, invoice.invoice_number)
+    pdf_path = save_invoice_pdf(pdf_bytes, f"{invoice.invoice_number}_paid" if is_paid else invoice.invoice_number)
     
     return pdf_path
 
@@ -456,4 +460,45 @@ async def download_invoice_pdf(
         pdf_path,
         media_type="application/pdf",
         filename=f"{invoice.invoice_number}.pdf"
+    )
+
+
+@router.get("/{invoice_id}/receipt-pdf")
+async def download_receipt_pdf(
+    invoice_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["admin"], required_permission="view_invoices"))
+):
+    """Download receipt PDF (paid version of invoice)"""
+    stmt = select(Invoice).where(Invoice.id == invoice_id)
+    result = await db.execute(stmt)
+    invoice = result.scalar_one_or_none()
+    
+    if not invoice:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invoice not found"
+        )
+    
+    # Check if paid PDF exists
+    paid_pdf_path = Path("uploads") / "invoices" / f"{invoice.invoice_number}_paid.pdf"
+    
+    if not paid_pdf_path.exists():
+        # Fall back to original PDF if paid version doesn't exist
+        original_pdf_path = Path("uploads") / "invoices" / f"{invoice.invoice_number}.pdf"
+        if not original_pdf_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="PDF not generated yet"
+            )
+        return FileResponse(
+            original_pdf_path,
+            media_type="application/pdf",
+            filename=f"{invoice.invoice_number}.pdf"
+        )
+    
+    return FileResponse(
+        paid_pdf_path,
+        media_type="application/pdf",
+        filename=f"{invoice.invoice_number}_paid.pdf"
     )

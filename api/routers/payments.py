@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import date, datetime
+from pathlib import Path
 
 from api.database import get_db
-from api.models import User, Payment, Student, Enrollment, PaymentMethod, PaymentStatus, Invoice, InvoiceStatus, UserRole
+from api.models import User, Payment, Student, Enrollment, PaymentMethod, PaymentStatus, Invoice, InvoiceStatus, UserRole, InvoiceItem
 from api.schemas import (
     PaymentCreate,
     PaymentUpdate,
@@ -14,6 +16,7 @@ from api.schemas import (
 )
 from api.routers.auth import get_current_active_user
 from api.auth import require_role
+from api.services.pdf_generator import generate_invoice_pdf_bytes, save_invoice_pdf
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -56,10 +59,12 @@ async def list_payments(
     result = await db.execute(stmt)
     payments = result.scalars().all()
     
-    # Manually set invoice_number for each payment
+    # Manually set invoice_number and student_name for each payment
     for payment in payments:
         if payment.invoice:
             payment.invoice_number = payment.invoice.invoice_number
+        if payment.student and payment.student.user:
+            payment.student_name = payment.student.user.full_name
     
     return payments
 
@@ -205,6 +210,13 @@ async def create_payment(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Invoice not found"
             )
+        
+        # Check if invoice is already paid
+        if invoice.status == InvoiceStatus.COMPLETED:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This invoice is already paid"
+            )
     
     # Create payment
     payment = Payment(
@@ -213,21 +225,118 @@ async def create_payment(
     )
     db.add(payment)
     await db.commit()
-    await db.refresh(payment)
     
-    # After payment is created, mark invoice as COMPLETED
-    if payment_data.invoice_id and payment.status == PaymentStatus.COMPLETED:
+    # Reload with relationships for response
+    payment_stmt = select(Payment).where(Payment.id == payment.id).options(
+        selectinload(Payment.student).selectinload(Student.user),
+        selectinload(Payment.payment_method),
+        selectinload(Payment.enrollment).selectinload(Enrollment.course),
+        selectinload(Payment.invoice)
+    )
+    result = await db.execute(payment_stmt)
+    payment_with_relations = result.scalar_one()
+    
+    # Create a response dict with the needed data
+    payment_data = {
+        "id": payment_with_relations.id,
+        "student_id": payment_with_relations.student_id,
+        "student_name": payment_with_relations.student.user.full_name if payment_with_relations.student and payment_with_relations.student.user else None,
+        "enrollment_id": payment_with_relations.enrollment_id,
+        "invoice_id": payment_with_relations.invoice_id,
+        "invoice_number": payment_with_relations.invoice.invoice_number if payment_with_relations.invoice else None,
+        "amount": payment_with_relations.amount,
+        "payment_date": payment_with_relations.payment_date,
+        "payment_method_id": payment_with_relations.payment_method_id,
+        "payment_method": {
+            "id": payment_with_relations.payment_method.id, 
+            "name": payment_with_relations.payment_method.name,
+            "is_active": payment_with_relations.payment_method.is_active,
+            "created_at": payment_with_relations.payment_method.created_at.isoformat() if payment_with_relations.payment_method.created_at else None,
+            "updated_at": payment_with_relations.payment_method.updated_at.isoformat() if payment_with_relations.payment_method.updated_at else None
+        } if payment_with_relations.payment_method else None,
+        "transaction_reference": payment_with_relations.transaction_reference,
+        "status": payment_with_relations.status,
+        "notes": payment_with_relations.notes,
+        "recorded_by": payment_with_relations.recorded_by,
+        "created_at": payment_with_relations.created_at,
+        "updated_at": payment_with_relations.updated_at,
+    }
+    
+    # After payment is created, mark invoice as COMPLETED and regenerate PDF
+    if payment_with_relations.invoice_id and payment_with_relations.status == PaymentStatus.COMPLETED:
         # Reload invoice
-        invoice_stmt = select(Invoice).where(Invoice.id == payment_data.invoice_id)
+        invoice_stmt = select(Invoice).where(Invoice.id == payment_with_relations.invoice_id)
         result = await db.execute(invoice_stmt)
         invoice = result.scalar_one_or_none()
         
         if invoice:
             # Mark invoice as COMPLETED
             invoice.status = InvoiceStatus.COMPLETED.value
+            
+            # Regenerate PDF with PAID watermark
+            try:
+                # Load invoice with relationships
+                invoice_stmt = select(Invoice).where(Invoice.id == payment_with_relations.invoice_id).options(
+                    selectinload(Invoice.student).selectinload(Student.user),
+                    selectinload(Invoice.items)
+                )
+                result = await db.execute(invoice_stmt)
+                invoice_with_relations = result.scalar_one()
+                
+                # Prepare items for PDF
+                items_data = [
+                    {
+                        "description": item.description,
+                        "quantity": item.quantity,
+                        "unit_price": item.unit_price,
+                        "amount": item.amount
+                    }
+                    for item in invoice_with_relations.items
+                ]
+                
+                # Format dates
+                issue_date_str = invoice_with_relations.issue_date.strftime("%B %d, %Y") if invoice_with_relations.issue_date else ""
+                due_date_str = invoice_with_relations.due_date.strftime("%B %d, %Y") if invoice_with_relations.due_date else ""
+                
+                # Get student info
+                student = invoice_with_relations.student
+                student_name = student.user.full_name if student and student.user else "N/A"
+                student_email = student.user.email if student and student.user and student.user.email else ""
+                student_phone = student.user.phone if student and student.user and student.user.phone else ""
+                
+                # Calculate tax rate
+                tax_rate = 15
+                if invoice_with_relations.total_amount > invoice_with_relations.discount_amount:
+                    tax_rate = round((invoice_with_relations.tax_amount / (invoice_with_relations.total_amount - invoice_with_relations.discount_amount)) * 100, 2)
+                
+                # Generate PAID PDF
+                pdf_bytes = generate_invoice_pdf_bytes(
+                    invoice_number=invoice_with_relations.invoice_number,
+                    issue_date=issue_date_str,
+                    due_date=due_date_str,
+                    student_name=student_name,
+                    student_email=student_email,
+                    student_phone=student_phone,
+                    items=items_data,
+                    subtotal=invoice_with_relations.total_amount,
+                    discount=invoice_with_relations.discount_amount or 0,
+                    tax=invoice_with_relations.tax_amount or 0,
+                    grand_total=invoice_with_relations.grand_total,
+                    tax_rate=tax_rate,
+                    is_paid=True
+                )
+                
+                # Save as paid invoice
+                paid_pdf_path = save_invoice_pdf(pdf_bytes, f"{invoice_with_relations.invoice_number}_paid")
+                invoice.pdf_url = paid_pdf_path
+                
+            except Exception as e:
+                # Log error but don't fail the payment
+                print(f"Error regenerating PDF: {str(e)}")
+            
             await db.commit()
     
-    return payment
+    return payment_data
 
 
 @router.patch("/{payment_id}", response_model=PaymentResponse)
@@ -267,10 +376,93 @@ async def update_payment(
         invoice = result.scalar_one_or_none()
         
         if invoice:
-            # If payment status changed to COMPLETED, mark invoice as COMPLETED
+            # If payment status changed to COMPLETED, check if invoice is already paid
             if payment.status == PaymentStatus.COMPLETED:
-                invoice.status = InvoiceStatus.COMPLETED.value
+                # Check if invoice is already paid
+                if invoice.status == InvoiceStatus.COMPLETED:
+                    # Invoice already paid, just return without updating
+                    pass
+                else:
+                    invoice.status = InvoiceStatus.COMPLETED.value
+                    
+                    # Regenerate PDF with PAID watermark
+                try:
+                    # Load invoice with relationships
+                    invoice_stmt = select(Invoice).where(Invoice.id == old_invoice_id).options(
+                        selectinload(Invoice.student).selectinload(Student.user),
+                        selectinload(Invoice.items)
+                    )
+                    result = await db.execute(invoice_stmt)
+                    invoice_with_relations = result.scalar_one()
+                    
+                    # Prepare items for PDF
+                    items_data = [
+                        {
+                            "description": item.description,
+                            "quantity": item.quantity,
+                            "unit_price": item.unit_price,
+                            "amount": item.amount
+                        }
+                        for item in invoice_with_relations.items
+                    ]
+                    
+                    # Format dates
+                    issue_date_str = invoice_with_relations.issue_date.strftime("%B %d, %Y") if invoice_with_relations.issue_date else ""
+                    due_date_str = invoice_with_relations.due_date.strftime("%B %d, %Y") if invoice_with_relations.due_date else ""
+                    
+                    # Get student info
+                    student = invoice_with_relations.student
+                    student_name = student.user.full_name if student and student.user else "N/A"
+                    student_email = student.user.email if student and student.user and student.user.email else ""
+                    student_phone = student.user.phone if student and student.user and student.user.phone else ""
+                    
+                    # Calculate tax rate
+                    tax_rate = 15
+                    if invoice_with_relations.total_amount > invoice_with_relations.discount_amount:
+                        tax_rate = round((invoice_with_relations.tax_amount / (invoice_with_relations.total_amount - invoice_with_relations.discount_amount)) * 100, 2)
+                    
+                    # Generate PAID PDF
+                    pdf_bytes = generate_invoice_pdf_bytes(
+                        invoice_number=invoice_with_relations.invoice_number,
+                        issue_date=issue_date_str,
+                        due_date=due_date_str,
+                        student_name=student_name,
+                        student_email=student_email,
+                        student_phone=student_phone,
+                        items=items_data,
+                        subtotal=invoice_with_relations.total_amount,
+                        discount=invoice_with_relations.discount_amount or 0,
+                        tax=invoice_with_relations.tax_amount or 0,
+                        grand_total=invoice_with_relations.grand_total,
+                        tax_rate=tax_rate,
+                        is_paid=True
+                    )
+                    
+                    # Save as paid invoice
+                    paid_pdf_path = save_invoice_pdf(pdf_bytes, f"{invoice_with_relations.invoice_number}_paid")
+                    invoice.pdf_url = paid_pdf_path
+                    
+                except Exception as e:
+                    # Log error but don't fail the payment update
+                    print(f"Error regenerating PDF: {str(e)}")
+                
             await db.commit()
+    
+    # Reload with relationships for response
+    payment_stmt = select(Payment).where(Payment.id == payment.id).options(
+        selectinload(Payment.student).selectinload(Student.user),
+        selectinload(Payment.payment_method),
+        selectinload(Payment.enrollment).selectinload(Enrollment.course),
+        selectinload(Payment.invoice)
+    )
+    result = await db.execute(payment_stmt)
+    payment = result.scalar_one()
+    
+    # Add invoice number if invoice exists
+    if payment.invoice:
+        payment.invoice_number = payment.invoice.invoice_number
+    if payment.student and payment.student.user:
+        payment.student_name = payment.student.user.full_name
     
     return payment
 
