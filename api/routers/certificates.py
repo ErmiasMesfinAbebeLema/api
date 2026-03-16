@@ -701,6 +701,59 @@ async def verify_certificate(
     )
 
 
+@public_certificates_router.get("/certificates/{certificate_number}/download")
+async def download_verified_certificate(
+    certificate_number: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Public endpoint to download a verified certificate PDF"""
+    result = await db.execute(
+        select(Certificate).where(Certificate.certificate_number == certificate_number)
+    )
+    certificate = result.scalar_one_or_none()
+    
+    if not certificate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Certificate not found"
+        )
+    
+    if certificate.status == CertificateStatus.REVOKED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This certificate has been revoked and cannot be downloaded"
+        )
+    
+    # Check if expired
+    if certificate.status == CertificateStatus.EXPIRED:
+        if certificate.expiry_date and certificate.expiry_date < date.today():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This certificate has expired and cannot be downloaded"
+            )
+    
+    if not certificate.pdf_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF not generated yet"
+        )
+    
+    # Return the file
+    file_path = Path(certificate.pdf_url.lstrip("/"))
+    
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF file not found"
+        )
+    
+    return FileResponse(
+        path=str(file_path),
+        filename=f"{certificate.certificate_number}.pdf",
+        media_type="application/pdf"
+    )
+
+
 # ─────────────────────────────────────────────────────────
 # Student Certificate Endpoints
 # ─────────────────────────────────────────────────────────
