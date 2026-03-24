@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from collections import defaultdict
 
 from api.database import get_db
-from api.models import User, Payment, Student, Enrollment, Course, PaymentMethod, PaymentStatus
+from api.models import User, Payment, Student, Enrollment, Course, PaymentMethod, PaymentStatus, Attendance, AttendanceStatus
 from api.routers.auth import get_current_active_user
 from api.auth import require_role
 
@@ -222,5 +222,179 @@ async def get_dashboard_summary(
         "revenue_change": ((float(monthly_revenue) - float(last_month_revenue)) / float(last_month_revenue) * 100) if last_month_revenue > 0 else 0,
         "total_students": total_students,
         "active_enrollments": active_enrollments,
-        "total_paid": float(total_paid)
+        "total_paid": float(total_paid),
+        # Attendance stats
+        "attendance": {
+            "total_records": 0,
+            "present": 0,
+            "absent": 0,
+            "pending": 0,
+            "present_rate": 0
+        },
+        "attendance_this_month": {
+            "total_records": 0,
+            "present": 0,
+            "absent": 0,
+            "pending": 0,
+            "present_rate": 0
+        }
+    }
+    
+    # Get attendance stats (all time) - using SQLAlchemy with explicit conditions
+    from sqlalchemy import or_, and_
+    
+    # Count total
+    total_stmt = select(func.count(Attendance.id))
+    result = await db.execute(total_stmt)
+    total_att = result.scalar() or 0
+    
+    # Count present (PRESENT + APPROVED) - using explicit OR
+    present_stmt = select(func.count(Attendance.id)).where(
+        or_(
+            Attendance.status == AttendanceStatus.PRESENT,
+            Attendance.status == AttendanceStatus.APPROVED
+        )
+    )
+    result = await db.execute(present_stmt)
+    present_att = result.scalar() or 0
+    
+    # Count absent (ABSENT + REJECTED) - using explicit OR
+    absent_stmt = select(func.count(Attendance.id)).where(
+        or_(
+            Attendance.status == AttendanceStatus.ABSENT,
+            Attendance.status == AttendanceStatus.REJECTED
+        )
+    )
+    result = await db.execute(absent_stmt)
+    absent_att = result.scalar() or 0
+    
+    # Count pending
+    pending_stmt = select(func.count(Attendance.id)).where(
+        Attendance.status == AttendanceStatus.PENDING
+    )
+    result = await db.execute(pending_stmt)
+    pending_att = result.scalar() or 0
+    
+    print(f"DEBUG: Attendance - total: {total_att}, present: {present_att}, absent: {absent_att}, pending: {pending_att}")
+    
+    return_data = {
+        "monthly_revenue": float(monthly_revenue),
+        "last_month_revenue": float(last_month_revenue),
+        "revenue_change": ((float(monthly_revenue) - float(last_month_revenue)) / float(last_month_revenue) * 100) if last_month_revenue > 0 else 0,
+        "total_students": total_students,
+        "active_enrollments": active_enrollments,
+        "total_paid": float(total_paid),
+        "attendance": {
+            "total_records": total_att,
+            "present": present_att,
+            "absent": absent_att,
+            "pending": pending_att,
+            "present_rate": round(present_att / total_att * 100, 1) if total_att > 0 else 0
+        },
+        "attendance_this_month": {
+            "total_records": total_att,
+            "present": present_att,
+            "absent": absent_att,
+            "pending": pending_att,
+            "present_rate": round(present_att / total_att * 100, 1) if total_att > 0 else 0
+        }
+    }
+    
+    return return_data
+
+
+@router.get("/attendance")
+async def get_attendance_report(
+    course_id: Optional[int] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["admin", "super_admin"], required_permission="view_reports"))
+):
+    """Get attendance report - statistics per course"""
+    # Default to current month if no dates provided
+    if not start_date:
+        start_date = date.today().replace(day=1)
+    if not end_date:
+        end_date = date.today()
+    
+    # Build base query
+    from sqlalchemy import case
+    query = select(
+        Attendance.course_id,
+        Course.name.label("course_name"),
+        func.count(Attendance.id).label("total_records"),
+        func.sum(case((Attendance.status == AttendanceStatus.PRESENT, 1), else_=0)).label("present_count"),
+        func.sum(case((Attendance.status == AttendanceStatus.ABSENT, 1), else_=0)).label("absent_count"),
+        func.sum(case((Attendance.status == AttendanceStatus.PENDING, 1), else_=0)).label("pending_count")
+    ).join(
+        Course, Course.id == Attendance.course_id
+    ).where(
+        Attendance.date >= start_date,
+        Attendance.date <= end_date
+    )
+    
+    if course_id:
+        query = query.where(Attendance.course_id == course_id)
+    
+    query = query.group_by(Attendance.course_id, Course.name).order_by(Course.name)
+    
+    result = await db.execute(query)
+    course_stats = []
+    
+    for row in result.all():
+        total = row.total_records or 0
+        present = row.present_count or 0
+        absent = row.absent_count or 0
+        pending = row.pending_count or 0
+        
+        present_rate = (present / total * 100) if total > 0 else 0
+        absent_rate = (absent / total * 100) if total > 0 else 0
+        
+        course_stats.append({
+            "course_id": row.course_id,
+            "course_name": row.course_name,
+            "total_records": total,
+            "present": present,
+            "absent": absent,
+            "pending": pending,
+            "present_rate": round(present_rate, 1),
+            "absent_rate": round(absent_rate, 1)
+        })
+    
+    # Overall stats
+    from sqlalchemy import case
+    overall_stmt = select(
+        func.count(Attendance.id).label("total"),
+        func.sum(case((Attendance.status == AttendanceStatus.PRESENT, 1), else_=0)).label("present"),
+        func.sum(case((Attendance.status == AttendanceStatus.ABSENT, 1), else_=0)).label("absent"),
+        func.sum(case((Attendance.status == AttendanceStatus.PENDING, 1), else_=0)).label("pending")
+    ).where(
+        Attendance.date >= start_date,
+        Attendance.date <= end_date
+    )
+    
+    if course_id:
+        overall_stmt = overall_stmt.where(Attendance.course_id == course_id)
+    
+    result = await db.execute(overall_stmt)
+    row = result.one()
+    
+    total = row.total or 0
+    present = row.present or 0
+    absent = row.absent or 0
+    pending = row.pending or 0
+    
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "overall": {
+            "total": total,
+            "present": present,
+            "absent": absent,
+            "pending": pending,
+            "present_rate": round((present / total * 100) if total > 0 else 0, 1),
+            "absent_rate": round((absent / total * 100) if total > 0 else 0, 1)
+        },
+        "by_course": course_stats
     }

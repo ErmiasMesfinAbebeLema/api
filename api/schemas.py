@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 from datetime import datetime, date
-from api.models import UserRole, Gender, EnrollmentStatus, DocumentType, CourseEnrollmentStatus, CertificateStatus, PaymentStatus, InvoiceStatus, AdminPermission
+from api.models import UserRole, Gender, EnrollmentStatus, DocumentType, CourseEnrollmentStatus, CertificateStatus, PaymentStatus, InvoiceStatus, AdminPermission, AttendanceStatus, InstructorCourse
 
 
 # ─────────────────────────────────────────────────────────
@@ -701,6 +701,144 @@ class EnrollmentItemResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ─────────────────────────────────────────────────────────
+# Attendance Schemas
+# ─────────────────────────────────────────────────────────
+
+class AttendanceBase(BaseModel):
+    """Base attendance schema"""
+    student_id: int
+    course_id: int
+    date: date
+    time_slot: int = Field(..., ge=2, le=23)
+    status: AttendanceStatus = AttendanceStatus.PENDING
+    notes: Optional[str] = None
+
+
+class AttendanceCreate(AttendanceBase):
+    """Schema for creating an attendance record"""
+    pass
+
+
+class AttendanceUpdate(BaseModel):
+    """Schema for updating an attendance record"""
+    status: Optional[AttendanceStatus] = None
+    notes: Optional[str] = None
+
+
+class AttendanceResponse(AttendanceBase):
+    """Schema for attendance response"""
+    id: int
+    instructor_id: Optional[int] = None
+    student_name: Optional[str] = None
+    course_name: Optional[str] = None
+    instructor_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AttendanceList(BaseModel):
+    """Schema for listing attendances"""
+    attendances: list[AttendanceResponse]
+    total: int
+
+
+class AttendanceCalendarResponse(BaseModel):
+    """Schema for calendar view of attendances"""
+    date: date
+    time_slot: int
+    records: list[AttendanceResponse]
+
+
+class InstructorScheduleBase(BaseModel):
+    """Base instructor schedule schema"""
+    course_id: Optional[int] = None
+    date: date
+    start_time: int = Field(..., ge=2, le=23)
+    end_time: int = Field(..., ge=2, le=23)
+    notes: Optional[str] = None
+
+
+class InstructorScheduleCreate(InstructorScheduleBase):
+    """Schema for creating instructor schedule"""
+    pass
+
+
+class InstructorScheduleBulkCreate(BaseModel):
+    """Schema for bulk creating instructor schedules"""
+    course_id: Optional[int] = None
+    start_date: date
+    end_date: date
+    days_of_week: list[int] = Field(..., description="Days 0-6 (Monday-Sunday)")
+    start_time: int = Field(..., ge=2, le=23)
+    end_time: int = Field(..., ge=2, le=23)
+    notes: Optional[str] = None
+
+
+class InstructorScheduleUpdate(BaseModel):
+    """Schema for updating instructor schedule"""
+    course_id: Optional[int] = None
+    date: Optional[date] = None
+    start_time: Optional[int] = Field(None, ge=2, le=23)
+    end_time: Optional[int] = Field(None, ge=2, le=23)
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class InstructorScheduleResponse(InstructorScheduleBase):
+    """Schema for instructor schedule response"""
+    id: int
+    instructor_id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    course_name: Optional[str] = None
+    instructor_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class InstructorScheduleList(BaseModel):
+    """Schema for listing instructor schedules"""
+    schedules: list[InstructorScheduleResponse]
+    total: int
+    message: Optional[str] = None
+
+
+class InstructorCourseBase(BaseModel):
+    """Base instructor-course assignment schema"""
+    instructor_id: int
+    course_id: int
+    is_active: bool = True
+
+
+class InstructorCourseCreate(InstructorCourseBase):
+    """Schema for creating instructor-course assignment"""
+    pass
+
+
+class InstructorCourseResponse(InstructorCourseBase):
+    """Schema for instructor-course response"""
+    id: int
+    assigned_by: Optional[int] = None
+    assigned_at: datetime
+    instructor_name: Optional[str] = None
+    course_name: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class InstructorCourseList(BaseModel):
+    """Schema for listing instructor-course assignments"""
+    assignments: list[InstructorCourseResponse]
+    total: int
 
 
 # ─────────────────────────────────────────────────────────

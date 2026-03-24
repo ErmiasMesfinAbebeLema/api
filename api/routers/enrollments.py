@@ -157,6 +157,54 @@ async def get_enrollment(
     return response
 
 
+# Get enrollments by course (for instructors)
+@router.get("/course/{course_id}", response_model=EnrollmentList)
+async def get_enrollments_by_course(
+    course_id: int,
+    status: Optional[CourseEnrollmentStatus] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all enrollments for a specific course (for instructor's course)"""
+    # Get course name first
+    course_result = await db.execute(select(Course).where(Course.id == course_id))
+    course = course_result.scalar_one_or_none()
+    course_name = course.name if course else None
+    
+    query = select(Enrollment).options(selectinload(Enrollment.student).selectinload(Student.user)).where(Enrollment.course_id == course_id)
+    
+    if status:
+        query = query.where(Enrollment.status == status)
+    else:
+        # Default to active enrollments only
+        query = query.where(Enrollment.status == CourseEnrollmentStatus.ACTIVE)
+    
+    result = await db.execute(query)
+    enrollments = result.scalars().all()
+    
+    # Build response with student details
+    enrollment_responses = []
+    for enrollment in enrollments:
+        student = enrollment.student
+        
+        if student and student.user:
+            enrollment_responses.append(EnrollmentResponse(
+                id=enrollment.id,
+                student_id=enrollment.student_id,
+                course_id=enrollment.course_id,
+                status=enrollment.status,
+                enrolled_at=enrollment.enrolled_at,
+                completed_at=enrollment.completion_date,
+                student_name=student.user.full_name,
+                course_name=course_name,
+                total_paid=0.0,
+                created_at=enrollment.created_at,
+                updated_at=enrollment.updated_at
+            ))
+    
+    return EnrollmentList(enrollments=enrollment_responses, total=len(enrollment_responses))
+
+
 @router.post("", response_model=EnrollmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_enrollment(
     enrollment: EnrollmentCreate,
@@ -434,44 +482,97 @@ async def get_student_enrollments(
     )
     enrollments = result.scalars().all()
     
-    # Get total count
-    count_result = await db.execute(
-        select(Enrollment).where(Enrollment.student_id == student_id)
-    )
-    total = len(count_result.scalars().all())
-    
-    # Build enrollment responses with total_paid calculated from payments
+    # Build enrollment responses
     enrollment_responses = []
     for enrollment in enrollments:
-        # Calculate total_paid from completed payments for this enrollment
-        paid_stmt = select(func.coalesce(func.sum(Payment.amount), 0)).where(
-            Payment.enrollment_id == enrollment.id,
-            Payment.status == PaymentStatus.COMPLETED
-        )
-        paid_result = await db.execute(paid_stmt)
-        total_paid = float(paid_result.scalar() or 0)
-        
         # Get course name
         course_stmt = select(Course.name).where(Course.id == enrollment.course_id)
         course_result = await db.execute(course_stmt)
         course_name = course_result.scalar()
         
+        # Get student name
+        student_stmt = select(Student).where(Student.id == enrollment.student_id)
+        student_result = await db.execute(student_stmt)
+        student_obj = student_result.scalar_one_or_none()
+        student_name = student_obj.user.full_name if student_obj and student_obj.user else "Unknown"
+        
         enrollment_responses.append(EnrollmentResponse(
             id=enrollment.id,
             student_id=enrollment.student_id,
             course_id=enrollment.course_id,
-            course_name=course_name,
-            fee=enrollment.fee,
             status=enrollment.status,
             enrolled_at=enrollment.enrolled_at,
+            completed_at=enrollment.completion_date,
+            course_name=course_name,
+            student_name=student_name,
+            fee=enrollment.fee,
             start_date=enrollment.start_date,
-            completion_date=enrollment.completion_date,
             grade=enrollment.grade,
             attendance_percentage=enrollment.attendance_percentage,
             notes=enrollment.notes,
             created_at=enrollment.created_at,
             updated_at=enrollment.updated_at,
-            total_paid=total_paid
+            total_paid=0.0
         ))
     
-    return {"enrollments": enrollment_responses, "total": total}
+    return EnrollmentList(enrollments=enrollment_responses, total=len(enrollment_responses))
+
+
+# New endpoint: Get current user's enrollments (for student self-service)
+# Note: Using CourseEnrollmentStatus.ACTIVE instead of string 'active'
+@router.get("/my-enrollments", response_model=EnrollmentList)
+async def get_my_enrollments(
+    status: Optional[CourseEnrollmentStatus] = Query(None),
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get current user's enrollments - works for students"""
+    # Find the student record for this user
+    result = await db.execute(select(Student).where(Student.user_id == current_user.id))
+    student = result.scalar_one_or_none()
+    
+    if not student:
+        return EnrollmentList(enrollments=[], total=0)
+    
+    # Get enrollments for this student
+    query = select(Enrollment).where(Enrollment.student_id == student.id)
+    
+    if status:
+        query = query.where(Enrollment.status == status)
+    
+    query = query.order_by(Enrollment.enrolled_at.desc()).offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    enrollments = result.scalars().all()
+    
+    # Build responses
+    enrollment_responses = []
+    for enrollment in enrollments:
+        # Get course name
+        course_stmt = select(Course.name).where(Course.id == enrollment.course_id)
+        course_result = await db.execute(course_stmt)
+        course_name = course_result.scalar()
+        
+        # Get student name
+        student_stmt = select(Student).where(Student.id == enrollment.student_id)
+        student_result = await db.execute(student_stmt)
+        student_obj = student_result.scalar_one_or_none()
+        student_name = student_obj.user.full_name if student_obj and student_obj.user else "Unknown"
+        
+        enrollment_responses.append(EnrollmentResponse(
+            id=enrollment.id,
+            student_id=enrollment.student_id,
+            course_id=enrollment.course_id,
+            status=enrollment.status,
+            enrolled_at=enrollment.enrolled_at,
+            completed_at=enrollment.completion_date,
+            course_name=course_name,
+            student_name=student_name
+        ))
+    
+    return EnrollmentList(enrollments=enrollment_responses, total=len(enrollment_responses))
+
+
+# Old code below - to be removed

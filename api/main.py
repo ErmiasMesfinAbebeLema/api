@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from api.config import settings
-from api.routers import auth, students, documents, courses, enrollments, certificates, payment_methods, payments, invoices, reports, admin_permissions
+from api.routers import auth, students, documents, courses, enrollments, certificates, payment_methods, payments, invoices, reports, admin_permissions, attendance, instructor_courses
 from api.database import engine
 from api.models import Base
 
@@ -55,6 +55,8 @@ app.include_router(payments.router, prefix="/api/v1")
 app.include_router(invoices.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(admin_permissions.router, prefix="/api/v1")
+app.include_router(attendance.router, prefix="/api/v1")
+app.include_router(instructor_courses.router, prefix="/api/v1")
 
 # Serve uploaded files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

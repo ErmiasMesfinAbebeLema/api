@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from typing import Optional
 from datetime import datetime
 from pathlib import Path
 import os
@@ -391,11 +392,22 @@ async def create_user(
 async def list_users(
     skip: int = 0,
     limit: int = 100,
+    role: Optional[str] = Query(None, description="Filter by role (e.g., instructor, admin, student)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["admin"]))
 ):
     """List all users (Admin only)"""
-    stmt = select(User).offset(skip).limit(limit)
+    stmt = select(User)
+    
+    # Filter by role if provided
+    if role:
+        try:
+            user_role = UserRole(role.lower())
+            stmt = stmt.where(User.role == user_role)
+        except ValueError:
+            pass  # Invalid role, return all users
+    
+    stmt = stmt.offset(skip).limit(limit)
     result = await db.execute(stmt)
     users = result.scalars().all()
     return users

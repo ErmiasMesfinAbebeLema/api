@@ -64,6 +64,31 @@ class InvoiceStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class AttendanceStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PRESENT = "present"
+    ABSENT = "absent"
+
+
+class InstructorCourse(Base):
+    """Instructor-Course assignment model"""
+    __tablename__ = "instructor_courses"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    instructor_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    course_id: Mapped[int] = mapped_column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
+    assigned_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Relationships
+    instructor: Mapped["User"] = relationship("User", foreign_keys=[instructor_id])
+    course: Mapped["Course"] = relationship("Course")
+    assigned_by_user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[assigned_by])
+
+
 class DocumentType(str, enum.Enum):
     NATIONAL_ID = "national_id"
     PASSPORT = "passport"
@@ -348,6 +373,63 @@ class Enrollment(Base):
     student: Mapped["Student"] = relationship("Student", back_populates="enrollments")
     course: Mapped["Course"] = relationship("Course", back_populates="enrollments")
     payments: Mapped[list["Payment"]] = relationship("Payment", back_populates="enrollment")
+
+
+# ─────────────────────────────────────────────────────────
+# Attendance Model
+# ─────────────────────────────────────────────────────────
+
+class Attendance(Base):
+    """Attendance tracking for students in courses"""
+    __tablename__ = "attendances"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    student_id: Mapped[int] = mapped_column(Integer, ForeignKey("students.id"), nullable=False, index=True)
+    course_id: Mapped[int] = mapped_column(Integer, ForeignKey("courses.id"), nullable=False, index=True)
+    instructor_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    date: Mapped[Date] = mapped_column(Date, nullable=False, index=True)
+    time_slot: Mapped[int] = mapped_column(Integer, nullable=False)  # Hour (2-23)
+    status: Mapped[AttendanceStatus] = mapped_column(
+        SQLEnum(AttendanceStatus),
+        default=AttendanceStatus.PENDING,
+        index=True
+    )
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, 
+        default=datetime.utcnow, 
+        onupdate=datetime.utcnow
+    )
+    
+    # Relationships
+    student: Mapped["Student"] = relationship("Student")
+    course: Mapped["Course"] = relationship("Course")
+    instructor: Mapped[Optional["User"]] = relationship("User")
+
+
+class InstructorSchedule(Base):
+    """Instructor planned schedule for attendance"""
+    __tablename__ = "instructor_schedules"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    instructor_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    course_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("courses.id"), nullable=True, index=True)
+    date: Mapped[Date] = mapped_column(Date, nullable=False, index=True)
+    start_time: Mapped[int] = mapped_column(Integer, nullable=False)  # Hour (2-23)
+    end_time: Mapped[int] = mapped_column(Integer, nullable=False)  # Hour (2-23)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, 
+        default=datetime.utcnow, 
+        onupdate=datetime.utcnow
+    )
+    
+    # Relationships
+    instructor: Mapped["User"] = relationship("User")
+    course: Mapped[Optional["Course"]] = relationship("Course")
 
 
 # ─────────────────────────────────────────────────────────

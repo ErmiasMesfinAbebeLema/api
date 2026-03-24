@@ -16,7 +16,7 @@ services:
       - database_postgres
     environment:
       - DATABASE_URL=postgresql+asyncpg://root:root@database_postgres:5432/db1010
-
+    restart: always
   database_postgres:  
     container_name: database  
     image: postgres
