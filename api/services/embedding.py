@@ -7,18 +7,25 @@ from typing import List, Dict, Any
 # Configure Gemini
 import google.generativeai as genai
 
-# Gemini API key
-GEMINI_API_KEY = "AIzaSyBEL_Ss8iZRaY54S94tAPsNZjf_9asnxyo"
-genai.configure(api_key=GEMINI_API_KEY)
+# Gemini API key - loaded from environment variable
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+else:
+    print("Warning: GEMINI_API_KEY not set in environment variables")
 
-# Pinecone configuration
-PINECONE_API_KEY = "pcsk_74AL3R_UVeDCgfZhLe1AsAU7ViExmNAc5HAXCSiXN2Zsqdr4VGiA4w624UdrVsDmWwy2kK"
-PINECONE_ENVIRONMENT = "us-east1-gcp"
+# Pinecone configuration - loaded from environment variables
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+PINECONE_ENVIRONMENT = os.getenv("PINECONE_ENVIRONMENT", "us-east1-gcp")
 
 # Initialize Pinecone
 try:
     from pinecone import Pinecone
-    pc = Pinecone(api_key=PINECONE_API_KEY)
+    if PINECONE_API_KEY:
+        pc = Pinecone(api_key=PINECONE_API_KEY)
+    else:
+        print("Warning: PINECONE_API_KEY not set in environment variables")
+        pc = None
 except Exception as e:
     print(f"Pinecone initialization error: {e}")
     pc = None

@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,9 +12,12 @@ from api.services.embedding import retrieve_relevant_faqs, ACADEMY_FAQS, index_f
 # Chat router
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-# Groq API key (hardcoded)
-GROQ_API_KEY = "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"
-GROQ_MODEL = "openai/gpt-oss-120b"
+# Groq API key - loaded from environment variable
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    print("Warning: GROQ_API_KEY not set in environment variables")
+
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-instruct")
 
 
 # Request/Response schemas
@@ -117,6 +121,11 @@ def get_client():
     """Get or create Groq client (lazy initialization)"""
     global _client
     if _client is None:
+        if not GROQ_API_KEY:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Groq API key not configured. Please set GROQ_API_KEY environment variable."
+            )
         from groq import Groq
         _client = Groq(api_key=GROQ_API_KEY)
     return _client
