@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ subject if subject else 'YM International Beauty Academy' }}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+        <tr>
+            <td align="center" style="padding: 40px 10px;">
+                <!-- Email Container -->
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0, 64, 128, 0.1);">
+                    
+                    <!-- Header with Logo -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #004080 0%, #003366 100%); padding: 40px 30px; text-align: center;">
+                            <img src="{{ base_url }}/images/logo.png" alt="YM International Beauty Academy" height="60" style="height: 60px; margin-bottom: 15px;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600; letter-spacing: 0.5px;">YM International Beauty Academy</h1>
+                            <p style="margin: 10px 0 0 0; color: #ffd700; font-size: 14px;">Your Journey to Beauty Excellence Starts Here</p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Email Content -->
+                    <tr>
+                        <td style="padding: 40px 35px;">
+                            {% block content %}{% endblock %}
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 3px solid #ffd700;">
+                            <p style="margin: 0 0 10px 0; color: #004080; font-weight: 600; font-size: 14px;">YM International Beauty Academy</p>
+                            <p style="margin: 0 0 15px 0; color: #666666; font-size: 12px;">
+                                Shashemene, Oromia, Ethiopia<br>
+                                <a href="mailto:support@yminternationalbeautyacademy.com" style="color: #004080; text-decoration: none;">support@yminternationalbeautyacademy.com</a>
+                            </p>
+                            <table role="presentation" align="center" cellspacing="0" cellpadding="0" style="margin: 15px auto;">
+                                <tr>
+                                    <td style="padding: 0 8px;"><a href="{{ base_url }}" style="color: #004080; text-decoration: none; font-size: 12px;">Website</a></td>
+                                    <td style="color: #dddddd;">|</td>
+                                    <td style="padding: 0 8px;"><a href="{{ base_url }}/courses" style="color: #004080; text-decoration: none; font-size: 12px;">Courses</a></td>
+                                    <td style="color: #dddddd;">|</td>
+                                    <td style="padding: 0 8px;"><a href="{{ base_url }}/contact" style="color: #004080; text-decoration: none; font-size: 12px;">Contact</a></td>
+                                </tr>
+                            </table>
+                            <p style="margin: 20px 0 0 0; color: #999999; font-size: 11px;">
+                                © {{ year }} YM International Beauty Academy. All rights reserved.<br>
+                                You received this email because you have an account with us.
+                            </p>
+                        </td>
+                    </tr>
+                    
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

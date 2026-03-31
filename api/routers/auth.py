@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 import os
 import shutil
+import logging
 
 from api.database import get_db
 from api.models import User, AdminPermission, UserRole
@@ -17,15 +18,24 @@ from api.schemas import (
     LoginResponse,
     UserUpdate,
     get_permissions,
-    Permission
+    Permission,
+    PasswordResetRequest,
+    PasswordResetConfirm,
+    EmailVerificationRequest,
+    EmailVerificationConfirm
 )
 from api.auth import (
     verify_password, 
     get_password_hash, 
     create_access_token,
+    create_password_reset_token,
+    create_email_verification_token,
+    verify_password_reset_token,
+    verify_email_verification_token,
     get_current_active_user,
     require_role
 )
+from api.services.email_service import email_service
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -107,7 +117,152 @@ async def register(
     await db.commit()
     await db.refresh(new_user)
     
+    # Send welcome email if user has email
+    if new_user.email:
+        try:
+            await email_service.send_welcome_email(
+                db=db,
+                user=new_user
+            )
+        except Exception as e:
+            logging.warning(f"Failed to send welcome email: {str(e)}")
+    
     return new_user
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+async def forgot_password(
+    request: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Request password reset - sends email with reset link"""
+    # Find user by email
+    stmt = select(User).where(User.email == request.email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+    
+    # Always return success to prevent email enumeration
+    # But only send email if user exists
+    if user:
+        try:
+            reset_token = create_password_reset_token(user.email)
+            await email_service.send_password_reset_email(
+                db=db,
+                user=user,
+                reset_token=reset_token
+            )
+        except Exception as e:
+            logging.warning(f"Failed to send password reset email: {str(e)}")
+    
+    return {"message": "If an account with that email exists, we've sent a password reset link."}
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+async def reset_password(
+    request: PasswordResetConfirm,
+    db: AsyncSession = Depends(get_db)
+):
+    """Reset password using token from email"""
+    # Verify token and get email
+    email = verify_password_reset_token(request.token)
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    # Find user by email
+    stmt = select(User).where(User.email == email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Update password
+    user.password_hash = get_password_hash(request.new_password)
+    await db.commit()
+    
+    return {"message": "Password reset successful. You can now login with your new password."}
+
+
+@router.post("/verify-email", status_code=status.HTTP_200_OK)
+async def verify_email_request(
+    request: EmailVerificationRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Request email verification - sends email with verification link"""
+    # Find user by email
+    stmt = select(User).where(User.email == request.email)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    if user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already verified"
+        )
+    
+    # Send verification email
+    try:
+        verification_token = create_email_verification_token(user.id, user.email)
+        await email_service.send_email_verification(
+            db=db,
+            user=user,
+            verification_token=verification_token
+        )
+    except Exception as e:
+        logging.warning(f"Failed to send verification email: {str(e)}")
+    
+    return {"message": "Verification email sent. Please check your inbox."}
+
+
+@router.post("/verify-email/confirm", status_code=status.HTTP_200_OK)
+async def verify_email_confirm(
+    request: EmailVerificationConfirm,
+    db: AsyncSession = Depends(get_db)
+):
+    """Confirm email verification using token from email"""
+    # Verify token and get user info
+    token_data = verify_email_verification_token(request.token)
+    if not token_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification token"
+        )
+    
+    # Find user
+    stmt = select(User).where(User.id == token_data["user_id"])
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    if user.is_email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already verified"
+        )
+    
+    # Mark email as verified
+    user.is_email_verified = True
+    user.email_verified_at = datetime.utcnow()
+    await db.commit()
+    
+    return {"message": "Email verified successfully!", "email": user.email}
 
 
 @router.post("/login", response_model=LoginResponse)

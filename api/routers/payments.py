@@ -6,6 +6,9 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import date, datetime
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 from api.database import get_db
 from api.models import User, Payment, Student, Enrollment, PaymentMethod, PaymentStatus, Invoice, InvoiceStatus, UserRole, InvoiceItem
@@ -17,6 +20,8 @@ from api.schemas import (
 from api.routers.auth import get_current_active_user
 from api.auth import require_role
 from api.services.pdf_generator import generate_invoice_pdf_bytes, save_invoice_pdf
+from api.services.notifications import NotificationService
+from api.services.email_service import email_service
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
@@ -336,6 +341,115 @@ async def create_payment(
             
             await db.commit()
     
+    # Create notification for payment received
+    try:
+        await NotificationService.notify_payment_received(
+            db=db,
+            payment_id=payment.id,
+            created_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"Failed to create payment notification: {str(e)}")
+    
+    # Send payment receipt email with attachments
+    if payment_with_relations.status == PaymentStatus.COMPLETED and payment_with_relations.student and payment_with_relations.student.user:
+        try:
+            student = payment_with_relations.student
+            
+            # Get invoice data for attachments
+            invoice_pdf = None
+            receipt_pdf = None
+            invoice_number = None
+            
+            if payment_with_relations.invoice:
+                invoice_number = payment_with_relations.invoice.invoice_number
+                
+                # Generate original invoice PDF
+                invoice_stmt = select(Invoice).where(Invoice.id == payment_with_relations.invoice_id).options(
+                    selectinload(Invoice.student).selectinload(Student.user),
+                    selectinload(Invoice.items)
+                )
+                result = await db.execute(invoice_stmt)
+                invoice_with_rels = result.scalar_one_or_none()
+                
+                if invoice_with_rels:
+                    items_data = [
+                        {
+                            "description": item.description,
+                            "quantity": item.quantity,
+                            "unit_price": f"{item.unit_price:,.2f}",
+                            "amount": f"{item.amount:,.2f}"
+                        }
+                        for item in invoice_with_rels.items
+                    ]
+                    
+                    issue_date_str = invoice_with_rels.issue_date.strftime("%B %d, %Y") if invoice_with_rels.issue_date else ""
+                    due_date_str = invoice_with_rels.due_date.strftime("%B %d, %Y") if invoice_with_rels.due_date else ""
+                    
+                    stu = invoice_with_rels.student
+                    stu_name = stu.user.full_name if stu and stu.user else "N/A"
+                    stu_email = stu.user.email if stu and stu.user and stu.user.email else ""
+                    stu_phone = stu.user.phone if stu and stu.user and stu.user.phone else ""
+                    
+                    tax_rate = 15
+                    if invoice_with_rels.total_amount > invoice_with_rels.discount_amount:
+                        tax_rate = round((invoice_with_rels.tax_amount / (invoice_with_rels.total_amount - invoice_with_rels.discount_amount)) * 100, 2)
+                    
+                    # Generate unpaid invoice PDF
+                    invoice_pdf = generate_invoice_pdf_bytes(
+                        invoice_number=invoice_with_rels.invoice_number,
+                        issue_date=issue_date_str,
+                        due_date=due_date_str,
+                        student_name=stu_name,
+                        student_email=stu_email,
+                        student_phone=stu_phone,
+                        items=items_data,
+                        subtotal=invoice_with_rels.total_amount,
+                        discount=invoice_with_rels.discount_amount or 0,
+                        tax=invoice_with_rels.tax_amount or 0,
+                        grand_total=invoice_with_rels.grand_total,
+                        tax_rate=tax_rate,
+                        is_paid=False
+                    )
+                    
+                    # Generate paid receipt PDF
+                    receipt_pdf = generate_invoice_pdf_bytes(
+                        invoice_number=invoice_with_rels.invoice_number,
+                        issue_date=issue_date_str,
+                        due_date=due_date_str,
+                        student_name=stu_name,
+                        student_email=stu_email,
+                        student_phone=stu_phone,
+                        items=items_data,
+                        subtotal=invoice_with_rels.total_amount,
+                        discount=invoice_with_rels.discount_amount or 0,
+                        tax=invoice_with_rels.tax_amount or 0,
+                        grand_total=invoice_with_rels.grand_total,
+                        tax_rate=tax_rate,
+                        is_paid=True
+                    )
+            
+            # Send email with attachments
+            course_name = ""
+            if payment_with_relations.enrollment and payment_with_relations.enrollment.course:
+                course_name = payment_with_relations.enrollment.course.name
+            
+            await email_service.send_payment_receipt_with_attachments(
+                db=db,
+                user=student.user,
+                receipt_number=f"PAY-{payment.id:06d}",
+                amount=f"{payment_with_relations.amount:,.2f}",
+                payment_method=payment_with_relations.payment_method.name if payment_with_relations.payment_method else "Unknown",
+                course_name=course_name,
+                payment_id=payment.id,
+                invoice_pdf_bytes=invoice_pdf,
+                receipt_pdf_bytes=receipt_pdf,
+                invoice_number=invoice_number
+            )
+            logger.info(f"Payment receipt email sent to {student.user.email} for payment {payment.id}")
+        except Exception as e:
+            logger.error(f"Failed to send payment receipt email: {str(e)}")
+    
     return payment_data
 
 
@@ -464,6 +578,20 @@ async def update_payment(
     if payment.student and payment.student.user:
         payment.student_name = payment.student.user.full_name
     
+    # Check if payment status changed
+    new_status = payment.status
+    if old_status != new_status:
+        try:
+            await NotificationService.notify_payment_updated(
+                db=db,
+                payment_id=payment.id,
+                old_status=old_status,
+                new_status=new_status,
+                created_by=current_user.id
+            )
+        except Exception as e:
+            logger.error(f"Failed to create payment update notification: {str(e)}")
+    
     return payment
 
 
@@ -486,11 +614,23 @@ async def delete_payment(
     
     # Get invoice_id before deletion
     invoice_id = payment.invoice_id
+    payment_amount = payment.amount
+    
+    # Get student and course info before deletion
+    student_name = "Unknown"
+    course_name = "the course"
+    if payment.enrollment and payment.enrollment.student and payment.enrollment.student.user:
+        student_name = payment.enrollment.student.user.full_name if payment.enrollment.student.user.full_name else f"{payment.enrollment.student.user.first_name} {payment.enrollment.student.user.last_name}"
+    if payment.enrollment and payment.enrollment.course:
+        course_name = payment.enrollment.course.name
     
     await db.delete(payment)
     await db.commit()
     
-    # Could add logic here to revert invoice status if needed
-    # For now, we'll leave the invoice as-is
+    # Create notification
+    try:
+        await NotificationService.notify_payment_deleted(db, payment_id, payment_amount, student_name, course_name, current_user.id)
+    except Exception as e:
+        logger.error(f"Failed to create payment delete notification: {str(e)}")
     
     return None

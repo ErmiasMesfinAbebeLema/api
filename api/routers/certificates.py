@@ -31,6 +31,8 @@ from api.schemas import (
 )
 from api.auth import require_role
 from api.services.pdf_generator import generate_certificate_pdf, save_certificate_pdf
+from api.services.notifications import NotificationService
+from api.services.email_service import email_service
 
 # Base URL for verification
 VERIFICATION_BASE_URL = os.getenv("VERIFICATION_BASE_URL", "http://localhost:3000/verify")
@@ -463,6 +465,31 @@ async def create_certificate(
     await db.commit()
     await db.refresh(db_certificate)
     
+    # Create notification for certificate issued
+    try:
+        await NotificationService.notify_certificate_issued(
+            db=db,
+            certificate_id=db_certificate.id,
+            created_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"Failed to create certificate notification: {str(e)}")
+    
+    # Send certificate email with PDF attachment
+    try:
+        if student.user:
+            await email_service.send_certificate_issued_with_attachment(
+                db=db,
+                user=student.user,
+                certificate_number=certificate_number,
+                course_name=course.name,
+                certificate_id=db_certificate.id,
+                certificate_pdf_bytes=pdf_bytes if 'pdf_bytes' in dir() else None
+            )
+            logger.info(f"Certificate email sent to {student.user.email}")
+    except Exception as e:
+        logger.error(f"Failed to send certificate email: {str(e)}")
+    
     return db_certificate
 
 
@@ -575,6 +602,18 @@ async def revoke_certificate(
     
     await db.commit()
     await db.refresh(certificate)
+    
+    # Create notification for certificate revoked
+    try:
+        await NotificationService.notify_certificate_updated(
+            db=db,
+            certificate_id=certificate.id,
+            old_status="ACTIVE",
+            new_status="REVOKED",
+            created_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"Failed to create certificate revoke notification: {str(e)}")
     
     return certificate
 

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 style="margin: 0 0 20px 0; color: #004080; font-size: 22px;">Enrollment Confirmed! 🎉</h2>
+
+<p style="margin: 0 0 25px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+    Congratulations {{ first_name }}!
+</p>
+
+<p style="margin: 0 0 25px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+    Your enrollment has been confirmed. We're excited to have you join us for <strong style="color: #004080;">{{ course_name }}</strong>!
+</p>
+
+<!-- Success Box -->
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #d4edda; border-left: 4px solid #28a745; border-radius: 0 8px 8px 0; margin: 25px 0;">
+    <tr>
+        <td style="padding: 20px;">
+            <p style="margin: 0 0 10px 0; color: #155724; font-weight: 600; font-size: 14px;">✅ ENROLLMENT DETAILS</p>
+            <p style="margin: 5px 0; color: #333333; font-size: 14px;"><strong>Course:</strong> {{ course_name }}</p>
+            <p style="margin: 5px 0; color: #333333; font-size: 14px;"><strong>Enrollment ID:</strong> #{{ enrollment_id }}</p>
+            <p style="margin: 5px 0; color: #333333; font-size: 14px;"><strong>Status:</strong> Active</p>
+        </td>
+    </tr>
+</table>
+
+<h3 style="margin: 30px 0 15px 0; color: #004080; font-size: 16px;">What's Next?</h3>
+
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 25px 0;">
+    <tr>
+        <td style="padding: 12px 0; border-bottom: 1px solid #eeeeee;">
+            <span style="font-size: 20px; margin-right: 10px;">📚</span>
+            <strong style="color: #004080;">Access Course Materials</strong><br>
+            <span style="color: #666666; font-size: 13px;">Log in to your student portal to view all course content</span>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding: 12px 0; border-bottom: 1px solid #eeeeee;">
+            <span style="font-size: 20px; margin-right: 10px;">📅</span>
+            <strong style="color: #004080;">Check Schedule</strong><br>
+            <span style="color: #666666; font-size: 13px;">View upcoming classes and attendance schedule</span>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding: 12px 0;">
+            <span style="font-size: 20px; margin-right: 10px;">💬</span>
+            <strong style="color: #004080;">Connect with Instructors</strong><br>
+            <span style="color: #666666; font-size: 13px;">Use the chat feature to ask questions</span>
+        </td>
+    </tr>
+</table>
+
+<!-- CTA Button -->
+<table role="presentation" align="center" cellspacing="0" cellpadding="0" style="margin: 30px 0;">
+    <tr>
+        <td style="border-radius: 25px; background: linear-gradient(135deg, #004080 0%, #003366 100%); text-align: center;">
+            <a href="{{ base_url }}/student/courses" style="display: inline-block; padding: 14px 40px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 15px;">
+                Go to My Courses →
+            </a>
+        </td>
+    </tr>
+</table>
+
+<p style="margin: 0; color: #004080; font-size: 14px;">
+    <strong>Questions?</strong><br>
+    Contact our support team at <a href="mailto:support@yminternationalbeautyacademy.com" style="color: #004080;">support@yminternationalbeautyacademy.com</a>
+</p>
+
+<p style="margin: 20px 0 0 0; color: #555555; font-size: 14px;">
+    Best wishes for your learning journey!<br>
+    <strong style="color: #004080;">The YM Beauty Academy Team 💜</strong>
+</p>
+{% endblock %}

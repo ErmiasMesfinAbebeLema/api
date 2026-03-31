@@ -1,0 +1,22 @@
+Enrollment Confirmed! 🎉
+
+Congratulations {{ first_name }}!
+
+Your enrollment has been confirmed. We're excited to have you join us for {{ course_name }}!
+
+ENROLLMENT DETAILS
+Course: {{ course_name }}
+Enrollment ID: #{{ enrollment_id }}
+Status: Active
+
+What's Next?
+
+- Access Course Materials: Log in to your student portal to view all course content
+- Check Schedule: View upcoming classes and attendance schedule
+- Connect with Instructors: Use the chat feature to ask questions
+
+Need Assistance?
+If you have any questions, our support team is here to help. Simply reply to this email or contact us through your student portal.
+
+Welcome aboard!
+YM Beauty Academy Team

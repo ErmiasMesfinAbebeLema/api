@@ -121,6 +121,8 @@ class User(Base):
         index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    email_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -137,6 +139,12 @@ class User(Base):
         uselist=False, 
         cascade="all, delete-orphan",
         foreign_keys="AdminPermission.admin_id"
+    )
+    notifications: Mapped[list["Notification"]] = relationship(
+        "Notification", 
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="Notification.user_id"
     )
 
 
@@ -213,6 +221,10 @@ class AdminPermission(Base):
     
     # Settings
     can_manage_settings: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Email Logs
+    can_view_email_logs: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_edit_email_logs: Mapped[bool] = mapped_column(Boolean, default=False)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -622,3 +634,75 @@ class InvoiceItem(Base):
     # Relationships
     invoice: Mapped["Invoice"] = relationship("Invoice", back_populates="items")
     enrollment: Mapped[Optional["Enrollment"]] = relationship("Enrollment")
+
+
+# ─────────────────────────────────────────────────────────
+# Notification Models
+# ─────────────────────────────────────────────────────────
+
+class NotificationType(str, enum.Enum):
+    """Notification type enum"""
+    ENROLLMENT = "enrollment"
+    PAYMENT = "payment"
+    CERTIFICATE = "certificate"
+    ATTENDANCE = "attendance"
+    ANNOUNCEMENT = "announcement"
+    SYSTEM = "system"
+    MESSAGE = "message"
+    INSTRUCTOR = "instructor"  # Instructor-related notifications
+
+
+class Notification(Base):
+    """Notification model for user notifications"""
+    __tablename__ = "notifications"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    type: Mapped[str] = mapped_column(String(50), nullable=False, default=NotificationType.SYSTEM.value)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    link: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], back_populates="notifications")
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by])
+
+
+class EmailLog(Base):
+    """Log of all sent emails"""
+    __tablename__ = "email_logs"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    
+    # Email Details
+    recipient_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    subject: Mapped[str] = mapped_column(String(500), nullable=False)
+    
+    # Email Content
+    email_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    template_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    body_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    body_html: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Context/Meta
+    context_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    related_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    related_entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    related_entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    
+    # Status Tracking
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False, index=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    # Relationships
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[related_user_id])

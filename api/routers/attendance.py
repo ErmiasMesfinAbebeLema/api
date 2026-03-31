@@ -24,6 +24,7 @@ from api.schemas import (
     InstructorScheduleList
 )
 from api.auth import get_current_active_user
+from api.services.notifications import NotificationService
 
 router = APIRouter(prefix="/attendances", tags=["attendances"])
 
@@ -120,6 +121,11 @@ async def create_attendance(
         created_at=db_attendance.created_at,
         updated_at=db_attendance.updated_at
     )
+    
+    # Send notifications
+    from api.services.notifications import NotificationService
+    await NotificationService.notify_student_attendance(db, db_attendance.id, current_user.id)
+    await NotificationService.notify_instructor_attendance(db, db_attendance.id, current_user.id)
     
     return response
 
@@ -641,6 +647,7 @@ async def create_bulk_schedules(
     
     # Check for conflicts in each scheduled date
     conflict_warnings = []
+    schedules = []
     current_date = schedule_bulk.start_date
     while current_date <= schedule_bulk.end_date:
         if current_date.weekday() in schedule_bulk.days_of_week:

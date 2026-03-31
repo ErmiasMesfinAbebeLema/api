@@ -63,6 +63,27 @@ class LoginResponse(BaseModel):
     user: UserResponse
 
 
+class PasswordResetRequest(BaseModel):
+    """Request password reset email"""
+    email: str = Field(..., description="Email address")
+
+
+class PasswordResetConfirm(BaseModel):
+    """Confirm password reset with new password"""
+    token: str = Field(..., description="Password reset token from email")
+    new_password: str = Field(..., min_length=8, description="New password")
+
+
+class EmailVerificationRequest(BaseModel):
+    """Request email verification email"""
+    email: str = Field(..., description="Email address")
+
+
+class EmailVerificationConfirm(BaseModel):
+    """Confirm email verification with token"""
+    token: str = Field(..., description="Email verification token from email")
+
+
 class RegisterRequest(UserCreate):
     """Registration request schema"""
     pass
@@ -140,6 +161,10 @@ class AdminPermissionSchema(BaseModel):
     
     # Settings
     can_manage_settings: bool = True
+    
+    # Email Logs
+    can_view_email_logs: bool = True
+    can_edit_email_logs: bool = False
 
 
 class AdminPermissionUpdate(BaseModel):
@@ -200,6 +225,10 @@ class AdminPermissionUpdate(BaseModel):
     
     # Settings
     can_manage_settings: Optional[bool] = None
+    
+    # Email Logs
+    can_view_email_logs: Optional[bool] = None
+    can_edit_email_logs: Optional[bool] = None
 
 
 class AdminPermissionResponse(AdminPermissionSchema):
@@ -305,6 +334,8 @@ def get_detailed_permissions(role: UserRole, admin_permission: Optional[AdminPer
                 can_export_reports=admin_permission.can_export_reports,
                 can_manage_instructors=admin_permission.can_manage_instructors,
                 can_manage_settings=admin_permission.can_manage_settings,
+                can_view_email_logs=admin_permission.can_view_email_logs,
+                can_edit_email_logs=admin_permission.can_edit_email_logs,
             )
         # Default admin permissions (all true)
         return AdminPermissionSchema()
@@ -343,6 +374,8 @@ def get_detailed_permissions(role: UserRole, admin_permission: Optional[AdminPer
             can_export_reports=False,
             can_manage_instructors=False,
             can_manage_settings=False,
+            can_view_email_logs=False,
+            can_edit_email_logs=False,
         )
     else:  # STUDENT
         return AdminPermissionSchema(
@@ -383,6 +416,8 @@ def get_detailed_permissions(role: UserRole, admin_permission: Optional[AdminPer
             can_export_reports=False,
             can_manage_instructors=False,
             can_manage_settings=False,
+            can_view_email_logs=False,
+            can_edit_email_logs=False,
         )
 
 
@@ -1147,3 +1182,111 @@ class InvoiceResponse(InvoiceBase):
 class InvoiceWithItems(InvoiceResponse):
     """Invoice with items"""
     items: list[InvoiceItemResponse] = []
+
+
+# ─────────────────────────────────────────────────────────
+# Notification Schemas
+# ─────────────────────────────────────────────────────────
+
+from api.models import NotificationType
+
+
+class NotificationBase(BaseModel):
+    """Base notification schema"""
+    type: str = NotificationType.SYSTEM.value
+    title: str = Field(..., max_length=255)
+    message: str
+    link: Optional[str] = None
+
+
+class NotificationCreate(NotificationBase):
+    """Schema for creating a notification (admin only)"""
+    user_id: int
+
+
+class NotificationCreateForUser(BaseModel):
+    """Schema for creating notification for a specific user"""
+    user_id: int
+    type: str = NotificationType.ANNOUNCEMENT.value
+    title: str = Field(..., max_length=255)
+    message: str
+    link: Optional[str] = None
+
+
+class NotificationResponse(NotificationBase):
+    """Schema for notification response"""
+    id: int
+    user_id: int
+    is_read: bool
+    created_by: Optional[int] = None
+    read_at: Optional[datetime] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class NotificationUpdate(BaseModel):
+    """Schema for updating notification"""
+    is_read: Optional[bool] = None
+
+
+# ─────────────────────────────────────────────────────────
+# Email Log Schemas
+# ─────────────────────────────────────────────────────────
+
+class EmailLogBase(BaseModel):
+    """Base schema for email log"""
+    recipient_email: str = Field(..., max_length=255)
+    subject: str = Field(..., max_length=500)
+    email_type: str = Field(..., max_length=50)
+    template_name: Optional[str] = None
+    status: str = "pending"
+
+
+class EmailLogCreate(EmailLogBase):
+    """Schema for creating email log"""
+    body_text: Optional[str] = None
+    body_html: Optional[str] = None
+    context_data: Optional[dict] = None
+    related_user_id: Optional[int] = None
+    related_entity_type: Optional[str] = None
+    related_entity_id: Optional[int] = None
+
+
+class EmailLogResponse(EmailLogBase):
+    """Schema for email log response"""
+    id: int
+    body_text: Optional[str] = None
+    body_html: Optional[str] = None
+    context_data: Optional[dict] = None
+    related_user_id: Optional[int] = None
+    related_entity_type: Optional[str] = None
+    related_entity_id: Optional[int] = None
+    error_message: Optional[str] = None
+    retry_count: int
+    last_retry_at: Optional[datetime] = None
+    created_at: datetime
+    sent_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class EmailLogStats(BaseModel):
+    """Schema for email statistics"""
+    total: int
+    sent: int
+    failed: int
+    pending: int
+    debug: int
+    skipped: int
+    sent_today: int
+    failed_by_type: dict
+    recent_failures: list[EmailLogResponse]
+
+
+class EmailLogList(BaseModel):
+    """Schema for email log list response"""
+    logs: list[EmailLogResponse]
+    total: int

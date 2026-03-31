@@ -3,6 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 from api.database import get_db
 from api.models import User, Course
@@ -13,6 +16,7 @@ from api.schemas import (
     CourseList
 )
 from api.auth import require_role
+from api.services.notifications import NotificationService
 
 router = APIRouter(prefix="/courses", tags=["Courses"])
 
@@ -83,6 +87,12 @@ async def create_course(
     await db.commit()
     await db.refresh(db_course)
     
+    # Create notification
+    try:
+        await NotificationService.notify_course_created(db, db_course.id, current_user.id)
+    except Exception as e:
+        logger.error(f"Failed to create course notification: {str(e)}")
+    
     return db_course
 
 
@@ -113,6 +123,12 @@ async def update_course(
     await db.commit()
     await db.refresh(course)
     
+    # Create notification
+    try:
+        await NotificationService.notify_course_updated(db, course.id, list(update_data.keys()), current_user.id)
+    except Exception as e:
+        logger.error(f"Failed to create course notification: {str(e)}")
+    
     return course
 
 
@@ -133,9 +149,16 @@ async def delete_course(
         )
     
     # Soft delete - just set inactive
+    course_name = course.name
     course.is_active = False
     course.updated_at = datetime.utcnow()
     
     await db.commit()
+    
+    # Create notification
+    try:
+        await NotificationService.notify_course_deleted(db, course.id, course_name, current_user.id)
+    except Exception as e:
+        logger.error(f"Failed to create course notification: {str(e)}")
     
     return None

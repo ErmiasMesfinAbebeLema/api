@@ -156,6 +156,8 @@ def require_role(allowed_roles: list[str], required_permission: str = None, requ
             'export_reports': 'can_export_reports',
             'manage_instructors': 'can_manage_instructors',
             'manage_settings': 'can_manage_settings',
+            'view_email_logs': 'can_view_email_logs',
+            'edit_email_logs': 'can_edit_email_logs',
         }
         
         # Get the database column name for the permission
@@ -186,3 +188,49 @@ def require_role(allowed_roles: list[str], required_permission: str = None, requ
         
         return user
     return role_checker
+
+
+def create_password_reset_token(email: str) -> str:
+    """Create a password reset token (JWT with 24 hour expiry)"""
+    data = {
+        "sub": email,
+        "type": "password_reset",
+        "exp": datetime.utcnow() + timedelta(hours=24)
+    }
+    return jwt.encode(data, settings.secret_key, algorithm=settings.algorithm)
+
+
+def create_email_verification_token(user_id: int, email: str) -> str:
+    """Create an email verification token (JWT with 48 hour expiry)"""
+    data = {
+        "sub": email,
+        "user_id": user_id,
+        "type": "email_verification",
+        "exp": datetime.utcnow() + timedelta(hours=48)
+    }
+    return jwt.encode(data, settings.secret_key, algorithm=settings.algorithm)
+
+
+def verify_password_reset_token(token: str) -> Optional[str]:
+    """Verify password reset token and return email if valid"""
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        if payload.get("type") != "password_reset":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+
+def verify_email_verification_token(token: str) -> Optional[dict]:
+    """Verify email verification token and return user_id and email if valid"""
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        if payload.get("type") != "email_verification":
+            return None
+        return {
+            "email": payload.get("sub"),
+            "user_id": payload.get("user_id")
+        }
+    except JWTError:
+        return None

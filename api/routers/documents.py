@@ -7,6 +7,9 @@ import os
 import shutil
 from pathlib import Path
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 from api.database import get_db
 from api.models import StudentDocument, Student, User, DocumentType, UserRole
@@ -17,6 +20,7 @@ from api.schemas import (
     StudentDocumentList
 )
 from api.auth import require_role, get_current_active_user
+from api.services.notifications import NotificationService
 
 router = APIRouter(prefix="/students/{student_id}/documents", tags=["Student Documents"])
 
@@ -101,6 +105,12 @@ async def upload_document(
     db.add(document)
     await db.commit()
     await db.refresh(document)
+    
+    # Create notification
+    try:
+        await NotificationService.notify_document_uploaded(db, document.id, current_user.id)
+    except Exception as e:
+        logger.error(f"Failed to create document upload notification: {str(e)}")
     
     return document
 
@@ -343,6 +353,12 @@ async def update_document(
     await db.commit()
     await db.refresh(document)
     
+    # Create notification
+    try:
+        await NotificationService.notify_document_updated(db, document.id, current_user.id)
+    except Exception as e:
+        logger.error(f"Failed to create document update notification: {str(e)}")
+    
     return document
 
 
@@ -353,8 +369,8 @@ async def delete_document(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["admin"], required_permission="delete_student_documents"))
 ):
-    # Check if student exists
-    result = await db.execute(select(Student).where(Student.id == student_id))
+    # Check if student exists (with user relationship)
+    result = await db.execute(select(Student).options(selectinload(Student.user)).where(Student.id == student_id))
     student = result.scalar_one_or_none()
     
     if not student:
@@ -382,8 +398,20 @@ async def delete_document(
     if os.path.exists(document.file_path):
         os.remove(document.file_path)
     
+    # Store info for notification before deleting
+    document_type = document.document_type
+    student_name = "Unknown"
+    if student and student.user:
+        student_name = student.user.full_name if student.user.full_name else f"{student.user.first_name} {student.user.last_name}"
+    
     # Delete record
     await db.delete(document)
     await db.commit()
+    
+    # Create notification
+    try:
+        await NotificationService.notify_document_deleted(db, student_id, document_type, student_name, current_user.id)
+    except Exception as e:
+        logger.error(f"Failed to create document delete notification: {str(e)}")
     
     return None

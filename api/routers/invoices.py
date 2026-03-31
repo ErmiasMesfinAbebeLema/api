@@ -23,6 +23,8 @@ from api.schemas import (
 from api.routers.auth import get_current_active_user
 from api.auth import require_role
 from api.services.pdf_generator import generate_invoice_pdf_bytes, save_invoice_pdf
+from api.services.notifications import NotificationService
+from api.services.email_service import email_service
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
@@ -265,6 +267,16 @@ async def create_invoice(
     await db.commit()
     await db.refresh(invoice)
     
+    # Create notification for invoice created
+    try:
+        await NotificationService.notify_invoice_created(
+            db=db,
+            invoice_id=invoice.id,
+            created_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"Failed to create invoice notification: {str(e)}")
+    
     # Auto-generate PDF
     try:
         logger.info(f"Starting PDF generation for invoice ID: {invoice.id}")
@@ -330,9 +342,37 @@ async def create_invoice(
         await db.commit()
         
         logger.info(f"Invoice updated with PDF URL")
+        
+        # Send invoice email with PDF attachment
+        try:
+            if invoice_with_relations.student and invoice_with_relations.student.user:
+                student = invoice_with_relations.student
+                
+                # Get course name from enrollment items
+                course_name = ""
+                for item in invoice_with_relations.items:
+                    if item.enrollment and item.enrollment.course:
+                        course_name = item.enrollment.course.name
+                        break
+                
+                # Send email with PDF
+                await email_service.send_invoice_sent(
+                    db=db,
+                    user=student.user,
+                    invoice_number=invoice_with_relations.invoice_number,
+                    issue_date=issue_date_str,
+                    due_date=due_date_str,
+                    course_name=course_name,
+                    grand_total=f"{invoice_with_relations.grand_total:,.2f}",
+                    invoice_id=invoice.id,
+                    invoice_pdf_bytes=pdf_bytes
+                )
+                logger.info(f"Invoice email sent to {student.user.email}")
+        except Exception as e:
+            logger.error(f"Failed to send invoice email: {str(e)}")
     except Exception as e:
         # Log error but don't fail invoice creation
-        logger.error(f"PDF generation failed: {str(e)}", exc_info=True)
+        logger.error(f"PDF generation failed: {str(e)}")
     
     return invoice
 
@@ -355,6 +395,9 @@ async def update_invoice(
             detail="Invoice not found"
         )
     
+    # Track old status for notification
+    old_status = invoice.status
+    
     # If status is being changed, recalculate grand total if needed
     update_data = invoice_data.model_dump(exclude_unset=True)
     
@@ -366,6 +409,21 @@ async def update_invoice(
     
     await db.commit()
     await db.refresh(invoice)
+    
+    # Check if invoice status changed
+    new_status = invoice.status
+    if old_status != new_status:
+        try:
+            await NotificationService.notify_invoice_updated(
+                db=db,
+                invoice_id=invoice.id,
+                old_status=old_status,
+                new_status=new_status,
+                created_by=current_user.id
+            )
+        except Exception as e:
+            logger.error(f"Failed to create invoice update notification: {str(e)}")
+    
     return invoice
 
 
@@ -386,8 +444,20 @@ async def delete_invoice(
             detail="Invoice not found"
         )
     
+    # Store info for notification before deleting
+    invoice_number = invoice.invoice_number
+    student_name = "Unknown"
+    if invoice.student:
+        student_name = invoice.student.user.full_name if invoice.student.user and invoice.student.user.full_name else f"{invoice.student.user.first_name} {invoice.student.user.last_name}" if invoice.student.user else "Unknown"
+    
     await db.delete(invoice)
     await db.commit()
+    
+    # Create notification
+    try:
+        await NotificationService.notify_invoice_deleted(db, invoice_id, invoice_number, student_name, current_user.id)
+    except Exception as e:
+        logger.error(f"Failed to create invoice delete notification: {str(e)}")
     
     return None
 
@@ -460,6 +530,158 @@ async def download_invoice_pdf(
         pdf_path,
         media_type="application/pdf",
         filename=f"{invoice.invoice_number}.pdf"
+    )
+
+
+@router.get("/student/{student_id}/invoice/{invoice_id}/pdf")
+async def download_student_invoice_pdf(
+    student_id: int,
+    invoice_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Download invoice PDF for student's own invoice (student or admin)"""
+    # Check if user is admin
+    if current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        # Admin can access any invoice
+        pass
+    elif current_user.role == UserRole.STUDENT:
+        # Students can only download their own invoices
+        stmt = select(Student).where(Student.id == student_id)
+        result = await db.execute(stmt)
+        student = result.scalar_one_or_none()
+        
+        if not student:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student not found"
+            )
+        
+        # Check if this is the student's own record
+        if student.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only download your own invoices"
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+    
+    # Get the invoice
+    stmt = select(Invoice).where(
+        Invoice.id == invoice_id,
+        Invoice.student_id == student_id
+    )
+    result = await db.execute(stmt)
+    invoice = result.scalar_one_or_none()
+    
+    if not invoice:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invoice not found"
+        )
+    
+    if not invoice.pdf_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF not generated yet"
+        )
+    
+    pdf_path = Path("uploads") / "invoices" / f"{invoice.invoice_number}.pdf"
+    
+    if not pdf_path.exists():
+        # Try paid version
+        paid_pdf_path = Path("uploads") / "invoices" / f"{invoice.invoice_number}_paid.pdf"
+        if paid_pdf_path.exists():
+            pdf_path = paid_pdf_path
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="PDF file not found"
+            )
+    
+    filename = f"{invoice.invoice_number}.pdf" if pdf_path.name == f"{invoice.invoice_number}.pdf" else f"{invoice.invoice_number}_paid.pdf"
+    
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=filename
+    )
+
+
+@router.get("/student/{student_id}/invoice/{invoice_id}/receipt-pdf")
+async def download_student_receipt_pdf(
+    student_id: int,
+    invoice_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Download receipt PDF (paid version) for student's own invoice (student or admin)"""
+    # Check if user is admin
+    if current_user.role in [UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        # Admin can access any invoice
+        pass
+    elif current_user.role == UserRole.STUDENT:
+        # Students can only download their own invoices
+        stmt = select(Student).where(Student.id == student_id)
+        result = await db.execute(stmt)
+        student = result.scalar_one_or_none()
+        
+        if not student:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Student not found"
+            )
+        
+        # Check if this is the student's own record
+        if student.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only download your own receipts"
+            )
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+    
+    # Get the invoice
+    stmt = select(Invoice).where(
+        Invoice.id == invoice_id,
+        Invoice.student_id == student_id
+    )
+    result = await db.execute(stmt)
+    invoice = result.scalar_one_or_none()
+    
+    if not invoice:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invoice not found"
+        )
+    
+    # Check if paid PDF exists
+    paid_pdf_path = Path("uploads") / "invoices" / f"{invoice.invoice_number}_paid.pdf"
+    
+    if not paid_pdf_path.exists():
+        # Fall back to original PDF if paid version doesn't exist
+        original_pdf_path = Path("uploads") / "invoices" / f"{invoice.invoice_number}.pdf"
+        if not original_pdf_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="PDF not generated yet"
+            )
+        return FileResponse(
+            original_pdf_path,
+            media_type="application/pdf",
+            filename=f"{invoice.invoice_number}.pdf"
+        )
+    
+    return FileResponse(
+        paid_pdf_path,
+        media_type="application/pdf",
+        filename=f"{invoice.invoice_number}_paid.pdf"
     )
 
 

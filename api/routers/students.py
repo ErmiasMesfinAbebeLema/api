@@ -5,6 +5,9 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.orm import selectinload
 from typing import List
 import bcrypt
+import logging
+
+logger = logging.getLogger(__name__)
 
 from api.database import get_db
 from api.models import User, Student, UserRole
@@ -18,6 +21,7 @@ from api.schemas import (
     UserResponse
 )
 from api.auth import get_current_active_user, require_role
+from api.services.notifications import NotificationService
 
 
 router = APIRouter(prefix="/students", tags=["Students"])
@@ -231,6 +235,16 @@ async def create_student_with_user(
     await db.commit()
     await db.refresh(student)
     
+    # Create notification for new student created
+    try:
+        await NotificationService.notify_student_created(
+            db=db,
+            student_id=student.id,
+            created_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"Failed to create student notification: {str(e)}")
+    
     return student_to_response(student, include_user=True)
 
 
@@ -257,9 +271,13 @@ async def update_student(
             detail="Student not found"
         )
     
+    # Track which fields were updated for notification
+    updated_fields = []
+    
     # Update user fields if provided
     if student_data.full_name is not None:
         student.user.full_name = student_data.full_name
+        updated_fields.append('full_name')
     if student_data.phone is not None:
         # Check if phone is already taken by another user
         stmt = select(User).where(User.phone == student_data.phone, User.id != student.user_id)
@@ -271,6 +289,7 @@ async def update_student(
                 detail="A user with this phone number already exists"
             )
         student.user.phone = student_data.phone
+        updated_fields.append('phone')
     if student_data.email is not None:
         # Check if email is already taken by another user
         stmt = select(User).where(User.email == student_data.email, User.id != student.user_id)
@@ -282,11 +301,13 @@ async def update_student(
                 detail="A user with this email already exists"
             )
         student.user.email = student_data.email
+        updated_fields.append('email')
     
     # Update student fields
     update_data = student_data.model_dump(exclude_unset=True, exclude={'full_name', 'phone', 'email'})
     for field, value in update_data.items():
         setattr(student, field, value)
+        updated_fields.append(field)
     
     await db.commit()
     await db.refresh(student)
@@ -296,6 +317,17 @@ async def update_student(
     stmt = select(Student).options(selectinload(Student.user)).where(Student.id == student_id)
     result = await db.execute(stmt)
     student = result.scalar_one()
+    
+    # Create notification for student update
+    try:
+        await NotificationService.notify_student_updated(
+            db=db,
+            student_id=student.id,
+            updated_fields=updated_fields,
+            created_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"Failed to create student update notification: {str(e)}")
     
     return student_to_response(student, include_user=True)
 
@@ -321,8 +353,17 @@ async def delete_student(
             detail="Student not found"
         )
     
+    # Store info for notification before deleting
+    student_name = f"{student.first_name} {student.last_name}" if student else "Unknown"
+    
     await db.delete(student)
     await db.commit()
+    
+    # Create notification
+    try:
+        await NotificationService.notify_student_deleted(db, student_id, student_name, current_user.id)
+    except Exception as e:
+        logger.error(f"Failed to create student delete notification: {str(e)}")
     
     return None
 

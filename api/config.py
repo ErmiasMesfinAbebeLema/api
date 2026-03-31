@@ -20,6 +20,27 @@ class Settings(BaseSettings):
     # Development
     debug: bool = True
     
+    # Base URL for email links
+    base_url: str = "https://yminternationalbeautyacademy.com"
+    
+    # Email SMTP Configuration
+    email_host: str = "smtp.gmail.com"
+    email_port: int = 587
+    email_use_tls: bool = True
+    email_use_ssl: bool = False
+    email_username: str = ""
+    email_password: str = ""
+    email_from_name: str = "YM Beauty Academy"
+    email_from_address: str = "noreply@yminternationalbeautyacademy.com"
+    email_reply_to: str = "support@yminternationalbeautyacademy.com"
+    email_max_retries: int = 3
+    email_timeout: int = 30
+    email_debug: bool = False  # Log emails instead of sending in development
+    
+    # OpenRouter Configuration
+    openrouter_api_key: str = ""
+    openrouter_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

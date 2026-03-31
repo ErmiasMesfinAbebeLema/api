@@ -20,6 +20,8 @@ from api.schemas import (
 from api.auth import require_role, get_current_active_user
 from api.routers.invoices import generate_invoice_number
 from api.services.pdf_generator import generate_invoice_pdf_bytes, save_invoice_pdf
+from api.services.notifications import NotificationService
+from api.services.email_service import email_service
 
 router = APIRouter(prefix="/enrollments", tags=["Enrollments"])
 
@@ -349,12 +351,81 @@ async def create_enrollment(
             
             # Update invoice with PDF URL
             invoice.pdf_url = pdf_url
+            
+            # Send invoice sent email
+            try:
+                email_log = await email_service.send_invoice_sent(
+                    db=db,
+                    user=student.user,
+                    invoice_number=invoice.invoice_number,
+                    issue_date=issue_date_str,
+                    due_date=due_date_str,
+                    course_name=course.name,
+                    grand_total=f"{invoice.grand_total:,.2f}",
+                    invoice_id=invoice.id,
+                    invoice_pdf_bytes=pdf_bytes
+                )
+                # If email was sent successfully, update invoice status to SENT
+                if email_log and email_log.status == "sent":
+                    invoice.status = InvoiceStatus.SENT
+                    logger.info(f"Invoice {invoice.invoice_number} marked as SENT")
+            except Exception as e:
+                logger.error(f"Failed to send invoice email: {str(e)}")
+            
             await db.commit()
             
-            logger.info(f"Invoice updated with PDF URL: {pdf_url}")
+            logger.info(f"Invoice updated with PDF URL")
         except Exception as e:
             # Log error but don't fail enrollment creation
-            logger.error(f"PDF generation failed: {str(e)}", exc_info=True)
+            logger.error(f"PDF generation failed: {str(e)}")
+    
+    # Create notification for enrollment created
+    try:
+        await NotificationService.notify_enrollment_created(
+            db=db,
+            enrollment_id=db_enrollment.id,
+            created_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"Failed to create notification: {str(e)}")
+    
+    # Create notification for invoice sent
+    try:
+        if enrollment.create_invoice and enrollment.fee and enrollment.fee > 0 and 'invoice' in dir():
+            await NotificationService.notify_invoice_sent(
+                db=db,
+                invoice_id=invoice.id,
+                created_by=current_user.id
+            )
+    except Exception as e:
+        logger.error(f"Failed to create invoice notification: {str(e)}")
+    
+    # Send enrollment confirmation email to student
+    try:
+        # Get student user info
+        student_stmt = select(Student).options(selectinload(Student.user)).where(Student.id == enrollment.student_id)
+        student_result = await db.execute(student_stmt)
+        student_obj = student_result.scalar_one_or_none()
+        
+        if student_obj and student_obj.user and student_obj.user.email:
+            await email_service.send_enrollment_confirmation(
+                db=db,
+                user=student_obj.user,
+                course_name=course.name,
+                enrollment_id=db_enrollment.id
+            )
+    except Exception as e:
+        logger.error(f"Failed to send enrollment confirmation email: {str(e)}")
+    
+    # Create notification for instructor about new enrollment
+    try:
+        await NotificationService.notify_instructor_enrollment(
+            db=db,
+            enrollment_id=db_enrollment.id,
+            created_by=current_user.id
+        )
+    except Exception as e:
+        logger.error(f"Failed to create instructor notification: {str(e)}")
     
     # Return enrollment response
     return EnrollmentResponse(
@@ -391,6 +462,9 @@ async def update_enrollment(
             detail="Enrollment not found"
         )
     
+    # Track old status for notification
+    old_status = enrollment.status
+    
     # Update fields
     update_data = enrollment_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -400,6 +474,31 @@ async def update_enrollment(
     
     await db.commit()
     await db.refresh(enrollment)
+    
+    # Check if enrollment status changed
+    new_status = enrollment.status
+    if old_status != new_status:
+        try:
+            await NotificationService.notify_enrollment_updated(
+                db=db,
+                enrollment_id=enrollment.id,
+                old_status=old_status,
+                new_status=new_status,
+                created_by=current_user.id
+            )
+        except Exception as e:
+            logger.error(f"Failed to create enrollment update notification: {str(e)}")
+    
+    # Check if enrollment was marked as completed
+    if enrollment_update.status == CourseEnrollmentStatus.COMPLETED:
+        try:
+            await NotificationService.notify_enrollment_completion(
+                db=db,
+                enrollment_id=enrollment.id,
+                created_by=current_user.id
+            )
+        except Exception as e:
+            logger.error(f"Failed to create completion notification: {str(e)}")
     
     return enrollment
 
@@ -428,8 +527,34 @@ async def delete_enrollment(
     for item in invoice_items:
         await db.delete(item)
     
+    # Store info for notification BEFORE deleting (lazy loading doesn't work after delete)
+    student_id = enrollment.student_id
+    course_id = enrollment.course_id
+    course_name = "the course"
+    student_name = "Unknown"
+    
+    # Get course name
+    if course_id:
+        course_result = await db.execute(select(Course).where(Course.id == course_id))
+        course = course_result.scalar_one_or_none()
+        if course:
+            course_name = course.name
+    
+    # Get student name (from user relationship)
+    if student_id:
+        student_result = await db.execute(select(Student).options(selectinload(Student.user)).where(Student.id == student_id))
+        student = student_result.scalar_one_or_none()
+        if student and student.user:
+            student_name = student.user.full_name if student.user.full_name else f"{student.user.first_name} {student.user.last_name}"
+    
     await db.delete(enrollment)
     await db.commit()
+    
+    # Create notification (after commit so it doesn't fail if notification fails)
+    try:
+        await NotificationService.notify_enrollment_deleted(db, student_id, course_name, student_name, current_user.id)
+    except Exception as e:
+        logger.error(f"Failed to create enrollment delete notification: {str(e)}")
     
     return None
 

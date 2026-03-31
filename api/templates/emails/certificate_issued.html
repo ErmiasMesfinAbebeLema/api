@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 style="margin: 0 0 20px 0; color: #004080; font-size: 22px;">Congratulations, {{ first_name }}! 🏆</h2>
+
+<p style="margin: 0 0 25px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+    We are thrilled to announce that you have successfully completed <strong style="color: #004080;">{{ course_name }}</strong>!
+</p>
+
+<!-- Certificate Box -->
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: linear-gradient(135deg, #004080 0%, #003366 100%); border-radius: 12px; margin: 25px 0; text-align: center;">
+    <tr>
+        <td style="padding: 35px 25px;">
+            <p style="margin: 0 0 15px 0; color: #ffd700; font-size: 48px;">🎓</p>
+            <p style="margin: 0 0 10px 0; color: #ffffff; font-size: 18px; font-weight: 600;">CERTIFICATE OF COMPLETION</p>
+            <p style="margin: 0 0 5px 0; color: #ffd700; font-size: 14px;">{{ course_name }}</p>
+            <p style="margin: 15px 0 0 0; color: #ffffff; font-size: 13px; opacity: 0.9;">Issued on {{ issue_date }}</p>
+            <p style="margin: 5px 0 0 0; color: #ffd700; font-size: 12px;">Certificate #: {{ certificate_number }}</p>
+        </td>
+    </tr>
+</table>
+
+<!-- Success Box -->
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #d4edda; border-left: 4px solid #28a745; border-radius: 0 8px 8px 0; margin: 25px 0;">
+    <tr>
+        <td style="padding: 20px;">
+            <p style="margin: 0 0 10px 0; color: #155724; font-weight: 600; font-size: 14px;">✅ YOUR ACHIEVEMENT</p>
+            <p style="margin: 0; color: #333333; font-size: 14px; line-height: 1.7;">
+                Your certificate is now available in your student portal. You can download, share, or print it at any time.
+            </p>
+        </td>
+    </tr>
+</table>
+
+<h3 style="margin: 30px 0 15px 0; color: #004080; font-size: 16px;">Share Your Achievement!</h3>
+
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 25px 0;">
+    <tr>
+        <td style="padding: 10px 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center;">
+            <p style="margin: 0 0 10px 0; color: #666666; font-size: 13px;">Share your certificate on LinkedIn or add it to your resume to showcase your skills!</p>
+        </td>
+    </tr>
+</table>
+
+<!-- CTA Button -->
+<table role="presentation" align="center" cellspacing="0" cellpadding="0" style="margin: 30px 0;">
+    <tr>
+        <td style="border-radius: 25px; background: linear-gradient(135deg, #004080 0%, #003366 100%); text-align: center;">
+            <a href="{{ base_url }}/student/certificates" style="display: inline-block; padding: 14px 40px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 15px;">
+                View My Certificates →
+            </a>
+        </td>
+    </tr>
+</table>
+
+<hr style="border: none; border-top: 1px solid #eeeeee; margin: 25px 0;">
+
+<p style="margin: 0 0 20px 0; color: #555555; font-size: 14px; line-height: 1.7;">
+    We are incredibly proud of your accomplishment! Completing a professional course takes dedication and hard work. 
+    This certificate is a testament to your commitment to excellence.
+</p>
+
+<p style="margin: 0; color: #555555; font-size: 14px;">
+    <strong style="color: #004080;\">What's Next?</strong><br>
+    Browse our other courses and continue your professional development!
+</p>
+
+<p style="margin: 20px 0 0 0; color: #004080; font-size: 14px;">
+    <strong>Congratulations once again!</strong><br>
+    <span style="color: #555555;">The YM Beauty Academy Team 💜</span>
+</p>
+{% endblock %}

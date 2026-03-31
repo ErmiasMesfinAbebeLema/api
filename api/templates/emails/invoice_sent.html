@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 style="margin: 0 0 20px 0; color: #004080; font-size: 22px;">New Invoice 📄</h2>
+
+<p style="margin: 0 0 25px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+    Dear {{ first_name }},
+</p>
+
+<p style="margin: 0 0 25px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+    A new invoice has been generated for your enrollment at YM Beauty Academy. Please review the details below.
+</p>
+
+<!-- Invoice Box -->
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8f9fa; border-radius: 8px; margin: 25px 0;">
+    <tr>
+        <td style="padding: 25px;">
+            <!-- Header -->
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-bottom: 2px solid #004080; padding-bottom: 15px; margin-bottom: 15px;">
+                <tr>
+                    <td>
+                        <p style="margin: 0; color: #004080; font-weight: 700; font-size: 18px;">YM International Beauty Academy</p>
+                        <p style="margin: 5px 0 0 0; color: #666666; font-size: 12px;">Addis Ababa, Ethiopia</p>
+                    </td>
+                    <td align="right">
+                        <p style="margin: 0; color: #666666; font-size: 12px;">INVOICE</p>
+                        <p style="margin: 5px 0 0 0; color: #004080; font-weight: 600; font-size: 14px;">#{{ invoice_number }}</p>
+                    </td>
+                </tr>
+            </table>
+            
+            <!-- Details -->
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                    <td style="padding: 8px 0; color: #666666; font-size: 13px;">Issue Date:</td>
+                    <td style="padding: 8px 0; color: #333333; font-size: 13px; text-align: right;">{{ issue_date }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #666666; font-size: 13px;">Due Date:</td>
+                    <td style="padding: 8px 0; color: #333333; font-size: 13px; text-align: right;">{{ due_date }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 8px 0; color: #666666; font-size: 13px;">Course:</td>
+                    <td style="padding: 8px 0; color: #333333; font-size: 13px; text-align: right;">{{ course_name }}</td>
+                </tr>
+            </table>
+            
+            <!-- Divider -->
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 15px 0;">
+                <tr>
+                    <td style="border-top: 1px dashed #cccccc;"></td>
+                </tr>
+            </table>
+            
+            <!-- Amount Due -->
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                    <td style="padding: 10px 0; color: #004080; font-weight: 600; font-size: 15px;">AMOUNT DUE</td>
+                    <td style="padding: 10px 0; color: #dc3545; font-weight: 700; font-size: 20px; text-align: right;">{{ grand_total }}</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+<!-- Payment Reminder -->
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 0 8px 8px 0; margin: 25px 0;">
+    <tr>
+        <td style="padding: 15px 20px;">
+            <p style="margin: 0; color: #856404; font-size: 14px;">
+                ⚠️ <strong>Payment Required</strong> - Please make your payment by {{ due_date }} to avoid any interruption to your studies.
+            </p>
+        </td>
+    </tr>
+</table>
+
+<!-- CTA Button -->
+<table role="presentation" align="center" cellspacing="0" cellpadding="0" style="margin: 30px 0;">
+    <tr>
+        <td style="border-radius: 25px; background: linear-gradient(135deg, #004080 0%, #003366 100%); text-align: center;">
+            <a href="{{ base_url }}/student/invoices" style="display: inline-block; padding: 14px 40px; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 15px;">
+                View Invoice Details →
+            </a>
+        </td>
+    </tr>
+</table>
+
+<p style="margin: 0; color: #555555; font-size: 13px; line-height: 1.7;">
+    If you have any questions about this invoice or need to discuss payment options, please contact our finance team.<br>
+    <a href="mailto:finance@yminternationalbeautyacademy.com" style="color: #004080;">finance@yminternationalbeautyacademy.com</a>
+</p>
+
+<p style="margin: 20px 0 0 0; color: #004080; font-size: 14px;">
+    <strong>Thank you for choosing YM Beauty Academy!</strong><br>
+    <span style="color: #555555;">The YM Beauty Academy Team 💜</span>
+</p>
+{% endblock %}
