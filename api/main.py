@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.config import settings
 from api.routers import auth, students, documents, courses, enrollments, certificates, payment_methods, payments, invoices, reports, admin_permissions, attendance, instructor_courses, chat, notifications, email_logs
+from api.routers.documents import student_router
 from api.database import engine
 from api.models import Base
 
@@ -44,6 +45,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(students.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
+app.include_router(student_router, prefix="/api/v1")
 app.include_router(courses.router, prefix="/api/v1")
 app.include_router(enrollments.router, prefix="/api/v1")
 app.include_router(certificates.templates_router, prefix="/api/v1")

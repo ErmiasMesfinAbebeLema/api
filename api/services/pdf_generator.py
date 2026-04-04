@@ -33,7 +33,8 @@ def generate_certificate_pdf(
     expiry_date: date | None,
     template_name: str,
     background_image_url: str | None = None,
-    verification_url: str = ""
+    verification_url: str = "",
+    student_photo_url: str | None = None
 ) -> bytes:
     """
     Generate PDF certificate from HTML template
@@ -48,6 +49,7 @@ def generate_certificate_pdf(
         template_name: Name of the template used
         background_image_url: URL for background image
         verification_url: URL to verify certificate
+        student_photo_url: URL for student's profile photo (optional)
         
     Returns:
         PDF as bytes
@@ -78,6 +80,9 @@ def generate_certificate_pdf(
     issue_date_str = issue_date.strftime("%B %d, %Y") if issue_date else ""
     expiry_date_str = expiry_date.strftime("%B %d, %Y") if expiry_date else "Lifetime"
     
+    # Pass student photo through as-is (already base64 if converted)
+    final_student_photo = student_photo_url
+    
     # Prepare context for template
     context = {
         "student_name": student_name,
@@ -89,6 +94,7 @@ def generate_certificate_pdf(
         "qr_code_base64": qr_code_base64,
         "verification_url": verification_url,
         "background_image_url": background_image_url,
+        "student_photo_url": final_student_photo,
     }
     
     # Render HTML with Jinja2

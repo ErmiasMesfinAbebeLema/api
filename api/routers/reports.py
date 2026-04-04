@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional
 from datetime import date, datetime, timedelta
@@ -216,6 +216,67 @@ async def get_dashboard_summary(
     result = await db.execute(paid_stmt)
     total_paid = result.scalar() or 0
     
+    # Attendance total
+    attendance_total_stmt = select(func.count(Attendance.id))
+    result = await db.execute(attendance_total_stmt)
+    total_attendance = result.scalar() or 0
+    
+    # Attendance present (PRESENT or APPROVED)
+    attendance_present_stmt = select(func.count(Attendance.id)).where(
+        or_(Attendance.status == AttendanceStatus.PRESENT, Attendance.status == AttendanceStatus.APPROVED)
+    )
+    result = await db.execute(attendance_present_stmt)
+    present_count = result.scalar() or 0
+    
+    # Attendance absent (ABSENT or REJECTED)
+    attendance_absent_stmt = select(func.count(Attendance.id)).where(
+        or_(Attendance.status == AttendanceStatus.ABSENT, Attendance.status == AttendanceStatus.REJECTED)
+    )
+    result = await db.execute(attendance_absent_stmt)
+    absent_count = result.scalar() or 0
+    
+    # Attendance pending
+    attendance_pending_stmt = select(func.count(Attendance.id)).where(
+        Attendance.status == AttendanceStatus.PENDING
+    )
+    result = await db.execute(attendance_pending_stmt)
+    pending_count = result.scalar() or 0
+    
+    # Attendance this month
+    attendance_month_stmt = select(func.count(Attendance.id)).where(
+        Attendance.date >= first_of_month,
+        Attendance.date <= today
+    )
+    result = await db.execute(attendance_month_stmt)
+    attendance_this_month_total = result.scalar() or 0
+    
+    attendance_month_present_stmt = select(func.count(Attendance.id)).where(
+        or_(Attendance.status == AttendanceStatus.PRESENT, Attendance.status == AttendanceStatus.APPROVED),
+        Attendance.date >= first_of_month,
+        Attendance.date <= today
+    )
+    result = await db.execute(attendance_month_present_stmt)
+    attendance_month_present = result.scalar() or 0
+    
+    attendance_month_absent_stmt = select(func.count(Attendance.id)).where(
+        or_(Attendance.status == AttendanceStatus.ABSENT, Attendance.status == AttendanceStatus.REJECTED),
+        Attendance.date >= first_of_month,
+        Attendance.date <= today
+    )
+    result = await db.execute(attendance_month_absent_stmt)
+    attendance_month_absent = result.scalar() or 0
+    
+    attendance_month_pending_stmt = select(func.count(Attendance.id)).where(
+        Attendance.status == AttendanceStatus.PENDING,
+        Attendance.date >= first_of_month,
+        Attendance.date <= today
+    )
+    result = await db.execute(attendance_month_pending_stmt)
+    attendance_month_pending = result.scalar() or 0
+    
+    present_rate = (present_count / total_attendance * 100) if total_attendance > 0 else 0
+    present_rate_month = (attendance_month_present / attendance_this_month_total * 100) if attendance_this_month_total > 0 else 0
+    
     return {
         "monthly_revenue": float(monthly_revenue),
         "last_month_revenue": float(last_month_revenue),
@@ -225,82 +286,20 @@ async def get_dashboard_summary(
         "total_paid": float(total_paid),
         # Attendance stats
         "attendance": {
-            "total_records": 0,
-            "present": 0,
-            "absent": 0,
-            "pending": 0,
-            "present_rate": 0
+            "total_records": total_attendance,
+            "present": present_count,
+            "absent": absent_count,
+            "pending": pending_count,
+            "present_rate": round(present_rate, 1)
         },
         "attendance_this_month": {
-            "total_records": 0,
-            "present": 0,
-            "absent": 0,
-            "pending": 0,
-            "present_rate": 0
+            "total_records": attendance_this_month_total,
+            "present": attendance_month_present,
+            "absent": attendance_month_absent,
+            "pending": attendance_month_pending,
+            "present_rate": round(present_rate_month, 1)
         }
     }
-    
-    # Get attendance stats (all time) - using SQLAlchemy with explicit conditions
-    from sqlalchemy import or_, and_
-    
-    # Count total
-    total_stmt = select(func.count(Attendance.id))
-    result = await db.execute(total_stmt)
-    total_att = result.scalar() or 0
-    
-    # Count present (PRESENT + APPROVED) - using explicit OR
-    present_stmt = select(func.count(Attendance.id)).where(
-        or_(
-            Attendance.status == AttendanceStatus.PRESENT,
-            Attendance.status == AttendanceStatus.APPROVED
-        )
-    )
-    result = await db.execute(present_stmt)
-    present_att = result.scalar() or 0
-    
-    # Count absent (ABSENT + REJECTED) - using explicit OR
-    absent_stmt = select(func.count(Attendance.id)).where(
-        or_(
-            Attendance.status == AttendanceStatus.ABSENT,
-            Attendance.status == AttendanceStatus.REJECTED
-        )
-    )
-    result = await db.execute(absent_stmt)
-    absent_att = result.scalar() or 0
-    
-    # Count pending
-    pending_stmt = select(func.count(Attendance.id)).where(
-        Attendance.status == AttendanceStatus.PENDING
-    )
-    result = await db.execute(pending_stmt)
-    pending_att = result.scalar() or 0
-    
-    print(f"DEBUG: Attendance - total: {total_att}, present: {present_att}, absent: {absent_att}, pending: {pending_att}")
-    
-    return_data = {
-        "monthly_revenue": float(monthly_revenue),
-        "last_month_revenue": float(last_month_revenue),
-        "revenue_change": ((float(monthly_revenue) - float(last_month_revenue)) / float(last_month_revenue) * 100) if last_month_revenue > 0 else 0,
-        "total_students": total_students,
-        "active_enrollments": active_enrollments,
-        "total_paid": float(total_paid),
-        "attendance": {
-            "total_records": total_att,
-            "present": present_att,
-            "absent": absent_att,
-            "pending": pending_att,
-            "present_rate": round(present_att / total_att * 100, 1) if total_att > 0 else 0
-        },
-        "attendance_this_month": {
-            "total_records": total_att,
-            "present": present_att,
-            "absent": absent_att,
-            "pending": pending_att,
-            "present_rate": round(present_att / total_att * 100, 1) if total_att > 0 else 0
-        }
-    }
-    
-    return return_data
 
 
 @router.get("/attendance")

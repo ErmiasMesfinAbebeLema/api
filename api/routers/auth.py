@@ -481,14 +481,14 @@ async def delete_profile_photo(
             except:
                 pass
     
-    # Update user profile with URL
-    current_user.profile_photo_url = photo_url
+    # Update user profile - set to None to remove
+    current_user.profile_photo_url = None
     await db.commit()
     await db.refresh(current_user)
     
     return {
-        "message": "Profile photo URL set successfully",
-        "profile_photo_url": current_user.profile_photo_url
+        "message": "Profile photo deleted successfully",
+        "profile_photo_url": None
     }
 
 

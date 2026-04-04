@@ -98,6 +98,8 @@ class DocumentType(str, enum.Enum):
     GRADE_10_CERTIFICATE = "grade_10_certificate"
     GRADE_12_CERTIFICATE = "grade_12_certificate"
     ETHIOPIAN_HIGHER_EDUCATION_ENTRANCE = "ethiopian_higher_education_entrance"
+    GRADE_REPORT = "GRADE_REPORT"
+    EXPERIENCE_LETTER = "EXPERIENCE_LETTER"
 
 
 # ─────────────────────────────────────────────────────────

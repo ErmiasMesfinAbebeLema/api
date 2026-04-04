@@ -13,7 +13,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 from api.database import get_db
-from api.models import User, Student, Course, Certificate, CertificateTemplate, CertificateStatus
+from api.models import User, Student, Course, Certificate, CertificateTemplate, CertificateStatus, StudentDocument, DocumentType
 from api.schemas import (
     CertificateTemplateCreate,
     CertificateTemplateUpdate,
@@ -374,9 +374,14 @@ async def create_certificate(
     current_user: User = Depends(require_role(["admin"], required_permission="create_certificates"))
 ):
     """Issue a certificate to a student"""
-    # Check if student exists
+    # Check if student exists with user and documents
     student_result = await db.execute(
-        select(Student).options(selectinload(Student.user)).where(Student.id == cert_data.student_id)
+        select(Student)
+        .options(
+            selectinload(Student.user),
+            selectinload(Student.documents)
+        )
+        .where(Student.id == cert_data.student_id)
     )
     student = student_result.scalar_one_or_none()
     
@@ -385,6 +390,31 @@ async def create_certificate(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Student not found"
         )
+    
+    # Get student profile photo - prefer StudentDocument, fallback to User.profile_photo_url
+    student_photo_url = None
+    
+    # First: Try to get from StudentDocument with type PROFILE_PHOTO
+    if student.documents:
+        for doc in student.documents:
+            if doc.document_type == DocumentType.PROFILE_PHOTO and doc.is_active:
+                student_photo_url = doc.file_path
+                break
+    
+    # Fallback: Use User.profile_photo_url
+    if not student_photo_url and student.user and student.user.profile_photo_url:
+        student_photo_url = student.user.profile_photo_url
+    
+    # Convert local image to base64 for PDF embedding
+    import base64
+    if student_photo_url and not student_photo_url.startswith('http') and not student_photo_url.startswith('data:'):
+        path = student_photo_url.lstrip('/')
+        if os.path.exists(path):
+            with open(path, 'rb') as f:
+                data = f.read()
+            ext = os.path.splitext(path)[1].lower()
+            mime = 'image/jpeg' if ext in ['.jpg', '.jpeg'] else 'image/png'
+            student_photo_url = f"data:{mime};base64,{base64.b64encode(data).decode()}"
     
     # Check if course exists
     course_result = await db.execute(select(Course).where(Course.id == cert_data.course_id))
@@ -431,7 +461,8 @@ async def create_certificate(
             expiry_date=cert_data.expiry_date,
             template_name=template.name,
             background_image_url=template.background_image_url,
-            verification_url=verification_url
+            verification_url=verification_url,
+            student_photo_url=student_photo_url
         )
         
         # Save PDF to storage

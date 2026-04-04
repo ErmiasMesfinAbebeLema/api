@@ -41,7 +41,7 @@ async def create_admin(role: str = "admin"):
                 print(f"  - {v[0]}")
             
             # Check if super_admin exists
-            super_admin_exists = any(v[0] == 'super_admin' for v in values)
+            super_admin_exists = any(v[0] == 'SUPER_ADMIN' for v in values)
             if not super_admin_exists:
                 print("\nERROR: super_admin does not exist in database enum!")
                 print("Please run add_super_admin.py first to add the enum value.")
