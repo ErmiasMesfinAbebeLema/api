@@ -668,6 +668,15 @@ async def delete_user(
             detail="User not found"
         )
     
+    # Delete related email logs first (to avoid foreign key constraint)
+    from api.models import EmailLog
+    email_logs_stmt = select(EmailLog).where(EmailLog.related_user_id == user_id)
+    email_logs_result = await db.execute(email_logs_stmt)
+    email_logs = email_logs_result.scalars().all()
+    
+    for email_log in email_logs:
+        await db.delete(email_log)
+    
     await db.delete(user)
     await db.commit()
     

@@ -134,7 +134,7 @@ class User(Base):
     )
     
     # Relationship
-    student: Mapped[Optional["Student"]] = relationship("Student", back_populates="user", uselist=False)
+    student: Mapped[Optional["Student"]] = relationship("Student", back_populates="user", uselist=False, cascade="all, delete-orphan")
     admin_permissions: Mapped[Optional["AdminPermission"]] = relationship(
         "AdminPermission", 
         back_populates="admin", 
@@ -147,6 +147,12 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
         foreign_keys="Notification.user_id"
+    )
+    email_logs: Mapped[list["EmailLog"]] = relationship(
+        "EmailLog", 
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="EmailLog.related_user_id"
     )
 
 
@@ -707,4 +713,4 @@ class EmailLog(Base):
     sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Relationships
-    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[related_user_id])
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="email_logs", foreign_keys=[related_user_id])
