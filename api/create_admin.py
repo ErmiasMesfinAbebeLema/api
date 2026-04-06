@@ -13,9 +13,9 @@ from pathlib import Path
 # Add the app directory to the path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from api.database import get_db
-from api.models import User, AdminPermission, UserRole
-from api.auth import get_password_hash
+from database import get_db
+from models import User, AdminPermission, UserRole
+from auth import get_password_hash
 
 
 async def create_admin():
