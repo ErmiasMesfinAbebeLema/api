@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y \
 COPY ./api ./api
 
 # Copy Alembic configuration and migrations
+#COPY alembic.ini ./
 COPY alembic ./alembic
 
 # Copy backup scripts and make them executable
@@ -36,7 +37,7 @@ COPY ./api/backup.sh /api/backup.sh
 COPY ./api/restore.sh /api/restore.sh
 RUN chmod +x /api/backup.sh /api/restore.sh
 
-# Copy cron file with proper format
+# Copy cron file
 COPY ./api/backup.cron /etc/cron.d/ym-backup
 RUN chmod 0644 /etc/cron.d/ym-backup
 

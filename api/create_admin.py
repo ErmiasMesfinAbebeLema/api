@@ -10,20 +10,21 @@ import asyncio
 import sys
 from pathlib import Path
 
-# Add the app directory to the path
+# Add the api directory to the path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from database import get_db
-from models import User, AdminPermission, UserRole
-from auth import get_password_hash
+from api.database import get_db
+from api.models import User, AdminPermission, UserRole
+from api.auth import get_password_hash
 
 
 async def create_admin():
-    """Create admin user with email: admin@yminternationalbeautyacademy.com"""
+    """Create admin user"""
     
-    email = "admin@yminternationalbeautyacademy.com"
+    # Default admin credentials
+    email = "admin@ymacademy.com"
     password = "@337034"
-    full_name = "SUPER ADMIN"
+    full_name = "Super Admin"
     
     async for db in get_db():
         try:
