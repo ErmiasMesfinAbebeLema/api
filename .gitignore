@@ -42,3 +42,9 @@ ENV/
 # Database
 *.db
 *.sqlite
+
+# Sensitive credentials
+api/gcs-credentials.json
+*.pem
+*.key
+id_rsa*

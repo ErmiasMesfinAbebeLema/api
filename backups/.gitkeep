@@ -1,0 +1,3 @@
+# Backups directory
+# This directory stores database and file backups
+# Add any backup files here - they are gitignored

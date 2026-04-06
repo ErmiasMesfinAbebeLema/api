@@ -1,0 +1,13 @@
+# Cron schedule for YM Academy backups
+# 
+# Format: minute hour day-of-month month day-of-week command
+#
+
+# Daily backup at 2:00 AM - Local + Cloud (30 days retention)
+0 2 * * * /bin/bash /api/backup.sh daily >> /var/log/backup.log 2>&1
+
+# Weekly backup on Sunday at 3:00 AM - Cloud only (90 days retention)
+0 3 * * 0 /bin/bash /api/backup.sh weekly >> /var/log/backup.log 2>&1
+
+# Monthly backup on 1st of month at 4:00 AM - Cloud only, Cold Storage (1 year retention)
+0 4 1 * * /bin/bash /api/backup.sh monthly >> /var/log/backup.log 2>&1
