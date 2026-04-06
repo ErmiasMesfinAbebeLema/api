@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from typing import List
 import bcrypt
 import logging
@@ -343,7 +342,8 @@ async def delete_student(
     
     Note: Instructors CANNOT delete students
     """
-    stmt = select(Student).where(Student.id == student_id)
+    # Load student with user relationship
+    stmt = select(Student).options(joinedload(Student.user)).where(Student.id == student_id)
     result = await db.execute(stmt)
     student = result.scalar_one_or_none()
     
@@ -354,7 +354,7 @@ async def delete_student(
         )
     
     # Store info for notification before deleting
-    student_name = f"{student.first_name} {student.last_name}" if student else "Unknown"
+    student_name = student.user.full_name if student and student.user else "Unknown"
     
     await db.delete(student)
     await db.commit()
