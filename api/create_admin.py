@@ -1,87 +1,86 @@
-"""Script to create an admin user"""
+#!/usr/bin/env python3
+"""
+Create Admin User Script
+=======================
+Run this script to create an admin user in the database.
+Usage: python create_admin.py
+"""
+
 import asyncio
 import sys
 from pathlib import Path
 
-# Add parent directory to sys.path for docker container
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Add the app directory to the path
+sys.path.insert(0, str(Path(__file__).parent))
 
-from passlib.context import CryptContext
-from sqlalchemy import select, text
-from api.database import async_session_maker
-from api.models import User, UserRole
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from api.database import get_db
+from api.models import User, AdminPermission, UserRole
+from api.auth import get_password_hash
 
 
-async def create_admin(role: str = "admin"):
-    email = "ermias@mulat.com"
-    password = "admin123"
-    full_name = "Ermias Admin"
+async def create_admin():
+    """Create admin user with email: admin@yminternationalbeautyacademy.com"""
     
-    # Map role string to UserRole enum
-    role_map = {
-        "super_admin": UserRole.SUPER_ADMIN,
-        "admin": UserRole.ADMIN,
-        "instructor": UserRole.INSTRUCTOR,
-        "student": UserRole.STUDENT,
-    }
+    email = "admin@yminternationalbeautyacademy.com"
+    password = "@337034"
+    full_name = "SUPER ADMIN"
     
-    user_role = role_map.get(role.lower(), UserRole.ADMIN)
-    
-    async with async_session_maker() as session:
-        # First, let's verify the enum values in the database
+    async for db in get_db():
         try:
-            result = await session.execute(
-                text("SELECT enumlabel FROM pg_enum WHERE enumtypid = (SELECT oid FROM pg_type WHERE typname = 'userrole') ORDER BY enumsortorder")
-            )
-            values = result.fetchall()
-            print("Current userrole enum values in database:")
-            for v in values:
-                print(f"  - {v[0]}")
+            # Check if user already exists
+            from sqlalchemy import select
+            stmt = select(User).where(User.email == email)
+            result = await db.execute(stmt)
+            existing_user = result.scalar_one_or_none()
             
-            # Check if super_admin exists
-            super_admin_exists = any(v[0] == 'SUPER_ADMIN' for v in values)
-            if not super_admin_exists:
-                print("\nERROR: super_admin does not exist in database enum!")
-                print("Please run add_super_admin.py first to add the enum value.")
+            if existing_user:
+                print(f"User with email {email} already exists!")
                 return
+            
+            # Create admin user
+            admin_user = User(
+                email=email,
+                full_name=full_name,
+                password_hash=get_password_hash(password),
+                role=UserRole.ADMIN,
+                is_active=True,
+                is_email_verified=True
+            )
+            
+            db.add(admin_user)
+            await db.flush()  # Get the user ID
+            
+            # Create admin permissions
+            admin_permissions = AdminPermission(
+                admin_id=admin_user.id,
+                can_manage_users=True,
+                can_manage_courses=True,
+                can_manage_students=True,
+                can_manage_enrollments=True,
+                can_manage_payments=True,
+                can_manage_certificates=True,
+                can_manage_settings=True,
+                can_view_reports=True,
+                can_send_notifications=True,
+                can_manage_instructors=True
+            )
+            
+            db.add(admin_permissions)
+            await db.commit()
+            
+            print(f"Admin user created successfully!")
+            print(f"Email: {email}")
+            print(f"Password: {password}")
+            print(f"Full Name: {full_name}")
+            print(f"User ID: {admin_user.id}")
+            
         except Exception as e:
-            print(f"Error checking enum: {e}")
-        
-        # Check if user exists
-        stmt = select(User).where(User.email == email)
-        result = await session.execute(stmt)
-        existing_user = result.scalar_one_or_none()
-        
-        if existing_user:
-            # Update role if user exists
-            existing_user.role = user_role
-            await session.commit()
-            print(f"\nUser {email} role updated to {user_role.value}!")
-            return
-        
-        # Create admin user
-        hashed_password = pwd_context.hash(password)
-        admin_user = User(
-            email=email,
-            password_hash=hashed_password,
-            full_name=full_name,
-            role=user_role,
-            is_active=True
-        )
-        
-        session.add(admin_user)
-        await session.commit()
-        await session.refresh(admin_user)
-        
-        print(f"\nAdmin user created successfully!")
-        print(f"Email: {email}")
-        print(f"Password: {password}")
-        print(f"Role: {admin_user.role.value}")
+            print(f"Error creating admin user: {e}")
+            await db.rollback()
+            raise
+    
+    return
 
 
 if __name__ == "__main__":
-    # Get role from command line argument
-    role = sys.argv[1] if len(sys.argv) > 1 else "admin"
-    asyncio.run(create_admin(role))
+    asyncio.run(create_admin())
