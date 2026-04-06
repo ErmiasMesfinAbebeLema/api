@@ -3,19 +3,17 @@
 Create Admin User Script
 =======================
 Run this script to create an admin user in the database.
-Usage: python create_admin.py
+Usage: docker exec api python /api/api/create_admin.py
 """
 
 import asyncio
 import sys
-import os
 
-# Add the parent directory to the path
-sys.path.insert(0, '/api')
-os.chdir('/api')
+# Set path to include api directory
+sys.path.insert(0, '/')
 
 from database import get_db
-from models import User, AdminPermission, UserRole
+from models import User, UserRole
 from auth import get_password_hash
 
 
@@ -36,41 +34,28 @@ async def create_admin():
             existing_user = result.scalar_one_or_none()
             
             if existing_user:
-                print(f"User with email {email} already exists!")
+                # Update role to SUPER_ADMIN if user exists
+                existing_user.role = UserRole.SUPER_ADMIN
+                existing_user.is_active = True
+                existing_user.is_email_verified = True
+                await db.commit()
+                print(f"User {email} updated to SUPER_ADMIN role!")
                 return
             
-            # Create admin user
+            # Create super admin user
             admin_user = User(
                 email=email,
                 full_name=full_name,
                 password_hash=get_password_hash(password),
-                role=UserRole.ADMIN,
+                role=UserRole.SUPER_ADMIN,
                 is_active=True,
                 is_email_verified=True
             )
             
             db.add(admin_user)
-            await db.flush()  # Get the user ID
-            
-            # Create admin permissions
-            admin_permissions = AdminPermission(
-                admin_id=admin_user.id,
-                can_manage_users=True,
-                can_manage_courses=True,
-                can_manage_students=True,
-                can_manage_enrollments=True,
-                can_manage_payments=True,
-                can_manage_certificates=True,
-                can_manage_settings=True,
-                can_view_reports=True,
-                can_send_notifications=True,
-                can_manage_instructors=True
-            )
-            
-            db.add(admin_permissions)
             await db.commit()
             
-            print(f"Admin user created successfully!")
+            print(f"Super Admin user created successfully!")
             print(f"Email: {email}")
             print(f"Password: {password}")
             print(f"Full Name: {full_name}")

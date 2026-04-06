@@ -1,68 +1,86 @@
-"""Script to create an admin user"""
+#!/usr/bin/env python3
+"""
+Create Admin User Script
+=======================
+Run this script to create an admin user in the database.
+Usage: docker exec api python /api/create_admin.py
+"""
+
 import asyncio
 import sys
-from pathlib import Path
 
-# Add parent directory to sys.path for docker container
-sys.path.insert(0, str(Path(__file__).parent))
+# Add the api directory to path for imports
+sys.path.insert(0, '/api')
 
-from passlib.context import CryptContext
-from sqlalchemy import select
-from api.database import async_session_maker
-from api.models import User, UserRole
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from api.database import get_db
+from api.models import User, AdminPermission, UserRole
+from api.auth import get_password_hash
 
 
-async def create_admin(role: str = "admin"):
-    email = "ermias@mulat.com"
+async def create_admin():
+    """Create admin user"""
+    
+    # Default admin credentials
+    email = "admin@ymacademy.com"
     password = "admin123"
-    full_name = "Ermias Admin"
+    full_name = "Super Admin"
     
-    # Map role string to UserRole enum
-    role_map = {
-        "super_admin": UserRole.SUPER_ADMIN,
-        "admin": UserRole.ADMIN,
-        "instructor": UserRole.INSTRUCTOR,
-        "student": UserRole.STUDENT,
-    }
+    async for db in get_db():
+        try:
+            # Check if user already exists
+            from sqlalchemy import select
+            stmt = select(User).where(User.email == email)
+            result = await db.execute(stmt)
+            existing_user = result.scalar_one_or_none()
+            
+            if existing_user:
+                print(f"User with email {email} already exists!")
+                return
+            
+            # Create admin user
+            admin_user = User(
+                email=email,
+                full_name=full_name,
+                password_hash=get_password_hash(password),
+                role=UserRole.ADMIN,
+                is_active=True,
+                is_email_verified=True
+            )
+            
+            db.add(admin_user)
+            await db.flush()  # Get the user ID
+            
+            # Create admin permissions
+            admin_permissions = AdminPermission(
+                admin_id=admin_user.id,
+                can_manage_users=True,
+                can_manage_courses=True,
+                can_manage_students=True,
+                can_manage_enrollments=True,
+                can_manage_payments=True,
+                can_manage_certificates=True,
+                can_manage_settings=True,
+                can_view_reports=True,
+                can_send_notifications=True,
+                can_manage_instructors=True
+            )
+            
+            db.add(admin_permissions)
+            await db.commit()
+            
+            print(f"Admin user created successfully!")
+            print(f"Email: {email}")
+            print(f"Password: {password}")
+            print(f"Full Name: {full_name}")
+            print(f"User ID: {admin_user.id}")
+            
+        except Exception as e:
+            print(f"Error creating admin user: {e}")
+            await db.rollback()
+            raise
     
-    user_role = role_map.get(role.lower(), UserRole.ADMIN)
-    
-    async with async_session_maker() as session:
-        # Check if user exists
-        stmt = select(User).where(User.email == email)
-        result = await session.execute(stmt)
-        existing_user = result.scalar_one_or_none()
-        
-        if existing_user:
-            # Update role if user exists
-            existing_user.role = user_role
-            await session.commit()
-            print(f"User {email} role updated to {user_role.value}!")
-            return
-        
-        # Create admin user
-        hashed_password = pwd_context.hash(password)
-        admin_user = User(
-            email=email,
-            password_hash=hashed_password,
-            full_name=full_name,
-            role=user_role,
-            is_active=True
-        )
-        
-        session.add(admin_user)
-        await session.commit()
-        await session.refresh(admin_user)
-        
-        print(f"Admin user created successfully!")
-        print(f"Email: {email}")
-        print(f"Password: {password}")
-        print(f"Role: {admin_user.role.value}")
+    return
 
 
 if __name__ == "__main__":
-    # Get role from command line argument
-    role = sys.argv[1] if len(sys.argv) > 1 else "admin"
-    asyncio.run(create_admin(role))
+    asyncio.run(create_admin())
